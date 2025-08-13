@@ -18,7 +18,7 @@ import type { WorkspaceFrontend } from "@/lib/database-schema";
 
 const formSchema = z.object({
   caseNumber: z.string().nullable().optional().transform(val => val || ""),
-  workspaceId: z.string().nullable().optional().transform(val => val || ""),
+  workspaceId: z.string().nullable().optional(),
   rentalCompany: z.string().nullable().optional().transform(val => val || ""),
   lawyer: z.string().nullable().optional().transform(val => val || ""),
   
@@ -78,7 +78,7 @@ export function CaseDetailForm({ caseData, onCaseUpdate, contacts, onAddContact 
     resolver: zodResolver(formSchema),
     defaultValues: {
       ...caseData,
-      workspaceId: caseData.workspaceId || "",
+      workspaceId: caseData.workspaceId || undefined,
       clientEmail: caseData.clientEmail || "",
       atFaultPartyEmail: caseData.atFaultPartyEmail || "",
     },
@@ -171,7 +171,7 @@ export function CaseDetailForm({ caseData, onCaseUpdate, contacts, onAddContact 
   useEffect(() => {
     form.reset({
       ...caseData,
-      workspaceId: caseData.workspaceId || "",
+      workspaceId: caseData.workspaceId || undefined,
       clientEmail: caseData.clientEmail || "",
       atFaultPartyEmail: caseData.atFaultPartyEmail || "",
     });
@@ -241,8 +241,8 @@ export function CaseDetailForm({ caseData, onCaseUpdate, contacts, onAddContact 
                 <FormItem>
                   <FormLabel>Assigned Workspace</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
+                    onValueChange={(value) => field.onChange(value || null)}
+                    value={field.value || undefined}
                     disabled={loadingWorkspaces}
                   >
                     <FormControl>
@@ -251,7 +251,6 @@ export function CaseDetailForm({ caseData, onCaseUpdate, contacts, onAddContact 
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">No Workspace</SelectItem>
                       {workspaces.map(workspace => (
                         <SelectItem key={workspace.id} value={workspace.id}>
                           {workspace.name}
