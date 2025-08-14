@@ -204,9 +204,28 @@ async function createTables() {
         accident_time TIME,
         accident_description TEXT,
         accident_diagram TEXT,
+        is_deleted BOOLEAN DEFAULT FALSE,
+        deleted_at TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    
+    // Add is_deleted column if it doesn't exist (for existing databases)
+    await client.query(`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                      WHERE table_name='cases' AND column_name='is_deleted') 
+        THEN 
+          ALTER TABLE cases ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                      WHERE table_name='cases' AND column_name='deleted_at') 
+        THEN 
+          ALTER TABLE cases ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE;
+        END IF;
+      END $$;
     `);
 
     // Contacts table (email unique)
@@ -974,7 +993,29 @@ const PostgreSQLService = {
     const client = await pool!.connect();
     
     try {
-      const result = await client.query('SELECT * FROM cases ORDER BY last_updated DESC');
+      // Only return cases that are not deleted
+      const result = await client.query(`
+        SELECT * FROM cases 
+        WHERE is_deleted = false OR is_deleted IS NULL
+        ORDER BY last_updated DESC
+      `);
+      return result.rows.map(mapDbRowToCaseFrontend);
+    } finally {
+      client.release();
+    }
+  },
+  
+  getDeletedCases: async (): Promise<CaseFrontend[]> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      // Return only deleted cases for trash folder
+      const result = await client.query(`
+        SELECT * FROM cases 
+        WHERE is_deleted = true
+        ORDER BY deleted_at DESC
+      `);
       return result.rows.map(mapDbRowToCaseFrontend);
     } finally {
       client.release();
@@ -1051,7 +1092,59 @@ const PostgreSQLService = {
     const client = await pool!.connect();
     
     try {
+      // Soft delete - mark as deleted instead of removing
+      const result = await client.query(`
+        UPDATE cases 
+        SET is_deleted = true, 
+            deleted_at = CURRENT_TIMESTAMP,
+            last_updated = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [id]);
+      return (result.rowCount ?? 0) > 0;
+    } finally {
+      client.release();
+    }
+  },
+  
+  permanentlyDeleteCase: async (id: string): Promise<boolean> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      // Actually delete the case from database
       const result = await client.query('DELETE FROM cases WHERE id = $1', [id]);
+      return (result.rowCount ?? 0) > 0;
+    } finally {
+      client.release();
+    }
+  },
+  
+  emptyTrash: async (): Promise<number> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      // Delete all cases marked as deleted
+      const result = await client.query('DELETE FROM cases WHERE is_deleted = true');
+      return result.rowCount ?? 0;
+    } finally {
+      client.release();
+    }
+  },
+  
+  restoreCase: async (id: string): Promise<boolean> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      // Restore a deleted case
+      const result = await client.query(`
+        UPDATE cases 
+        SET is_deleted = false, 
+            deleted_at = NULL,
+            last_updated = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [id]);
       return (result.rowCount ?? 0) > 0;
     } finally {
       client.release();
@@ -1206,7 +1299,12 @@ const PostgreSQLService = {
     const client = await pool!.connect();
     
     try {
-      const result = await client.query('SELECT * FROM user_accounts ORDER BY email');
+      // Only return users that are not deleted
+      const result = await client.query(`
+        SELECT * FROM user_accounts 
+        WHERE status != 'deleted' OR status IS NULL
+        ORDER BY email
+      `);
       return result.rows;
     } finally {
       client.release();
