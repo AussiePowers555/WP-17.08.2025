@@ -207,13 +207,32 @@ export default function CasesListClient({
       console.log(`[Delete] Response status: ${response.status}, Response: ${responseText}`);
 
       if (response.ok) {
-        // Immediately remove the case from the local state
-        setHydratedCases(prev => prev.filter(c => c.caseNumber !== caseNumber));
+        // Immediately remove the case from ALL state variables
+        setHydratedCases(prev => {
+          const filtered = prev.filter(c => c.caseNumber !== caseNumber);
+          console.log(`[Delete] Removed case from UI. Before: ${prev.length}, After: ${filtered.length}`);
+          return filtered;
+        });
         
-        // Then reload the page to get fresh data
+        // Also remove from open rows if it was expanded
+        setOpenRows(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(caseNumber);
+          return newSet;
+        });
+        
+        // Reset deleting state AFTER updating the lists
+        setTimeout(() => {
+          setIsDeleting(false);
+        }, 200);
+        
+        // Force router refresh to get new server data
+        router.refresh();
+        
+        // As a fallback, also do a hard reload after a short delay
         setTimeout(() => {
           window.location.reload();
-        }, 500);
+        }, 1000);
       } else {
         // Parse error if possible
         try {
