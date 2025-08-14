@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DatabaseService, ensureDatabaseInitialized } from '@/lib/database';
-import { getAuth } from '@/lib/server-auth';
+import { DatabaseService, ensureDatabaseInitialized, db } from '@/lib/database';
+import { authenticateRequest } from '@/lib/server-auth';
+import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
+
+// Helper function to generate temporary password
+function generateTempPassword(length = 12): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+}
+
+// Helper function to hash password
+function hashPassword(password: string): string {
+  const salt = process.env.PASSWORD_SALT || 'default-salt';
+  return crypto.createHash('sha256').update(password + salt).digest('hex');
+}
 
 // GET /api/workspaces/[id]/users - Get all users in a workspace
 export async function GET(
@@ -9,26 +27,36 @@ export async function GET(
 ) {
   try {
     await ensureDatabaseInitialized();
-    const auth = await getAuth(request);
-    if (!auth) {
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success || !authResult.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id: workspaceId } = await context.params;
 
-    // Check if user has access to this workspace
-    const access = await DatabaseService.checkWorkspaceAccess(workspaceId, auth.userId);
-    if (!access.hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
     // Get all users in the workspace
-    const users = await DatabaseService.getWorkspaceUsers(workspaceId);
+    const result = await db.query(`
+      SELECT 
+        wu.id,
+        wu.user_id,
+        wu.workspace_id,
+        wu.role,
+        wu.display_name,
+        wu.is_active,
+        wu.joined_at,
+        u.name,
+        u.email,
+        u.status as user_status,
+        u.last_login
+      FROM workspace_users wu
+      JOIN users u ON wu.user_id = u.id
+      WHERE wu.workspace_id = $1 AND wu.is_active = true
+      ORDER BY wu.joined_at DESC
+    `, [workspaceId]);
     
     return NextResponse.json({ 
-      users,
-      currentUserRole: access.role,
-      currentUserPermissions: access.permissions
+      users: result.rows,
+      currentUserRole: authResult.user.role
     });
   } catch (error) {
     console.error('Error fetching workspace users:', error);
@@ -46,17 +74,16 @@ export async function POST(
 ) {
   try {
     await ensureDatabaseInitialized();
-    const auth = await getAuth(request);
-    if (!auth) {
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success || !authResult.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id: workspaceId } = await context.params;
     const body = await request.json();
 
-    // Check if user has admin access to this workspace
-    const access = await DatabaseService.checkWorkspaceAccess(workspaceId, auth.userId);
-    if (!access.hasAccess || (access.role !== 'admin' && access.role !== 'developer')) {
+    // Check if user has admin access
+    if (authResult.user.role !== 'admin' && authResult.user.role !== 'developer') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
@@ -67,41 +94,97 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
     }
 
-    // Create user and add to workspace
-    const result = await DatabaseService.createUserAndAddToWorkspace({
-      email,
-      display_name,
-      role,
-      workspace_id: workspaceId,
-      invited_by: auth.userId
-    });
+    // Start transaction
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
 
-    // Track credential distribution
-    await DatabaseService.createCredentialDistribution({
-      user_id: result.user.id,
-      workspace_id: workspaceId,
-      recipient_email: email,
-      recipient_name: display_name,
-      distribution_method: 'workspace_invitation',
-      credentials_data: {
-        email,
-        tempPassword: result.tempPassword,
-        workspace_id: workspaceId,
-        role
-      },
-      distributed_by: auth.userId
-    });
+      // Check if user already exists
+      let userResult = await client.query(
+        'SELECT id, email FROM users WHERE email = $1',
+        [email]
+      );
 
-    return NextResponse.json({
-      success: true,
-      user: result.user,
-      workspaceUser: result.workspaceUser,
-      credentials: {
-        email,
-        password: result.tempPassword,
-        loginUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://app.whitepointer.com'
+      let userId;
+      let tempPassword = '';
+      let isNewUser = false;
+
+      if (userResult.rows.length === 0) {
+        // Create new user
+        userId = uuidv4();
+        tempPassword = generateTempPassword();
+        const hashedPassword = hashPassword(tempPassword);
+
+        await client.query(`
+          INSERT INTO users (id, email, name, password, role, status, requires_password_change)
+          VALUES ($1, $2, $3, $4, $5, 'active', true)
+        `, [userId, email, display_name || email, hashedPassword, 'client']);
+        
+        isNewUser = true;
+      } else {
+        userId = userResult.rows[0].id;
       }
-    });
+
+      // Check if user is already in workspace
+      const existingMembership = await client.query(
+        'SELECT id FROM workspace_users WHERE workspace_id = $1 AND user_id = $2',
+        [workspaceId, userId]
+      );
+
+      if (existingMembership.rows.length > 0) {
+        // Reactivate if inactive
+        await client.query(`
+          UPDATE workspace_users 
+          SET is_active = true, role = $3, display_name = $4, joined_at = NOW()
+          WHERE workspace_id = $1 AND user_id = $2
+        `, [workspaceId, userId, role, display_name]);
+      } else {
+        // Add user to workspace
+        await client.query(`
+          INSERT INTO workspace_users (id, workspace_id, user_id, role, display_name, invited_by_email)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [uuidv4(), workspaceId, userId, role, display_name, authResult.user.email]);
+      }
+
+      await client.query('COMMIT');
+
+      // Track credential distribution if new user
+      if (isNewUser) {
+        await DatabaseService.createCredentialDistribution({
+          user_id: userId,
+          workspace_id: workspaceId,
+          recipient_email: email,
+          recipient_name: display_name,
+          distribution_method: 'workspace_invitation',
+          credentials_data: {
+            email,
+            tempPassword,
+            workspace_id: workspaceId,
+            role
+          },
+          distributed_by: authResult.user.id
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        user: {
+          id: userId,
+          email,
+          name: display_name
+        },
+        credentials: isNewUser ? {
+          email,
+          password: tempPassword,
+          loginUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://app.whitepointer.com'
+        } : null
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error('Error adding user to workspace:', error);
     return NextResponse.json(
@@ -118,17 +201,16 @@ export async function PUT(
 ) {
   try {
     await ensureDatabaseInitialized();
-    const auth = await getAuth(request);
-    if (!auth) {
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success || !authResult.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id: workspaceId } = await context.params;
     const body = await request.json();
 
-    // Check if user has admin access to this workspace
-    const access = await DatabaseService.checkWorkspaceAccess(workspaceId, auth.userId);
-    if (!access.hasAccess || (access.role !== 'admin' && access.role !== 'developer')) {
+    // Check if user has admin access
+    if (authResult.user.role !== 'admin' && authResult.user.role !== 'developer') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
@@ -140,16 +222,38 @@ export async function PUT(
     }
 
     // Prevent user from modifying their own role
-    if (user_id === auth.userId && role !== access.role) {
+    if (user_id === authResult.user.id && role && role !== authResult.user.role) {
       return NextResponse.json({ error: 'Cannot modify your own role' }, { status: 400 });
     }
 
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramCount = 2;
+
+    if (role !== undefined) {
+      updates.push(`role = $${paramCount++}`);
+      values.push(role);
+    }
+    if (display_name !== undefined) {
+      updates.push(`display_name = $${paramCount++}`);
+      values.push(display_name);
+    }
+    if (is_active !== undefined) {
+      updates.push(`is_active = $${paramCount++}`);
+      values.push(is_active);
+    }
+
+    if (updates.length === 0) {
+      return NextResponse.json({ error: 'No updates provided' }, { status: 400 });
+    }
+
     // Update user in workspace
-    await DatabaseService.updateWorkspaceUser(workspaceId, user_id, {
-      ...(role && { role }),
-      ...(display_name !== undefined && { display_name }),
-      ...(is_active !== undefined && { is_active })
-    });
+    await db.query(`
+      UPDATE workspace_users 
+      SET ${updates.join(', ')}
+      WHERE workspace_id = $1 AND user_id = $2
+    `, [workspaceId, user_id, ...values]);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -161,15 +265,15 @@ export async function PUT(
   }
 }
 
-// DELETE /api/workspaces/[id]/users/[userId] - Remove a user from a workspace
+// DELETE /api/workspaces/[id]/users - Remove a user from a workspace
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     await ensureDatabaseInitialized();
-    const auth = await getAuth(request);
-    if (!auth) {
+    const authResult = await authenticateRequest(request);
+    if (!authResult.success || !authResult.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -181,19 +285,22 @@ export async function DELETE(
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
-    // Check if user has admin access to this workspace
-    const access = await DatabaseService.checkWorkspaceAccess(workspaceId, auth.userId);
-    if (!access.hasAccess || (access.role !== 'admin' && access.role !== 'developer')) {
+    // Check if user has admin access
+    if (authResult.user.role !== 'admin' && authResult.user.role !== 'developer') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     // Prevent user from removing themselves
-    if (userId === auth.userId) {
+    if (userId === authResult.user.id) {
       return NextResponse.json({ error: 'Cannot remove yourself from workspace' }, { status: 400 });
     }
 
     // Remove user from workspace (soft delete)
-    await DatabaseService.removeWorkspaceUser(workspaceId, userId);
+    await db.query(`
+      UPDATE workspace_users 
+      SET is_active = false, removed_at = NOW()
+      WHERE workspace_id = $1 AND user_id = $2
+    `, [workspaceId, userId]);
 
     return NextResponse.json({ success: true });
   } catch (error) {

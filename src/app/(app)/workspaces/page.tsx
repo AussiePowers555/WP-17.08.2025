@@ -9,7 +9,7 @@ import { useWorkspaces, useContacts } from "@/hooks/use-database";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Building, PlusCircle, MoreVertical, Edit, Trash2, Users } from "lucide-react";
+import { Building, PlusCircle, MoreVertical, Edit, Trash2, Users, ArrowRight, Activity, Clock, UserPlus, Settings2, Briefcase, Scale, Car } from "lucide-react";
 import type { WorkspaceFrontend as Workspace, ContactFrontend as Contact } from "@/lib/database-schema";
 import { NewWorkspaceForm } from "./new-workspace-form";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkspaceUserManagement } from '@/components/workspace-user-management';
 import { useAuth } from '@/context/AuthContext';
+import { cn } from '@/lib/utils';
 
 const workspaceCategories: Contact['type'][] = ['Insurer', 'Lawyer', 'Rental Company'];
 
@@ -134,37 +135,92 @@ export default function WorkspacesPage() {
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
             <div>
-                 <h1 className="text-2xl font-bold">Workspaces</h1>
-                 <p className="text-muted-foreground">Workspaces act as saved filters for your cases.</p>
+                 <h1 className="text-2xl font-bold">Workspace Directory</h1>
+                 <p className="text-muted-foreground">Manage and organize your workspaces for different companies and clients.</p>
             </div>
           <Button onClick={openNewForm}>
-            <PlusCircle className="mr-2 h-4 w-4" /> New Workspace
+            <PlusCircle className="mr-2 h-4 w-4" /> Create Workspace
           </Button>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <Card>
+                <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-muted-foreground">Total Workspaces</p>
+                            <p className="text-2xl font-bold">{workspaces.length}</p>
+                        </div>
+                        <Building className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-muted-foreground">Insurers</p>
+                            <p className="text-2xl font-bold">{getWorkspacesForCategory('Insurer').length}</p>
+                        </div>
+                        <Briefcase className="h-8 w-8 text-green-500" />
+                    </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-muted-foreground">Lawyers</p>
+                            <p className="text-2xl font-bold">{getWorkspacesForCategory('Lawyer').length}</p>
+                        </div>
+                        <Scale className="h-8 w-8 text-blue-500" />
+                    </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-muted-foreground">Rental Companies</p>
+                            <p className="text-2xl font-bold">{getWorkspacesForCategory('Rental Company').length}</p>
+                        </div>
+                        <Car className="h-8 w-8 text-purple-500" />
+                    </div>
+                </CardContent>
+            </Card>
         </div>
 
         <Card>
             <CardHeader>
-                <CardTitle>Select a Workspace Filter</CardTitle>
+                <CardTitle>Your Workspaces</CardTitle>
                 <CardDescription>
-                Click on a workspace to view all cases associated with that company or lawyer, or select Main Workspace to view all cases.
+                Select a workspace to enter, or manage workspace settings and users.
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 {/* Main Workspace - Special Section */}
                 {workspaces.find(ws => ws.name === 'Main Workspace') && (
-                  <div className="mb-6 p-4 border rounded-lg bg-primary/5">
-                    <h3 className="text-lg font-semibold mb-2">Main Workspace</h3>
-                    <p className="text-sm text-muted-foreground mb-3">View all cases across all workspaces and unassigned cases</p>
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-3">GLOBAL VIEW</h3>
                     <Card 
-                      className="cursor-pointer transition-all hover:shadow-lg border-primary/20 hover:border-primary/50"
+                      className="group cursor-pointer transition-all hover:shadow-lg border-2 border-primary/20 hover:border-primary/50 bg-gradient-to-br from-primary/5 to-primary/10"
                       onClick={() => handleSelectWorkspace(workspaces.find(ws => ws.name === 'Main Workspace')!.id)}
                     >
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-primary">
-                          <Building /> Main Workspace
-                        </CardTitle>
-                        <CardDescription>Shows all cases without filtering</CardDescription>
-                      </CardHeader>
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-lg bg-primary/20 flex items-center justify-center">
+                              <Building className="h-6 w-6 text-primary" />
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-lg">Main Workspace</h4>
+                              <p className="text-sm text-muted-foreground">View and manage all cases across all workspaces</p>
+                            </div>
+                          </div>
+                          <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                        </div>
+                      </CardContent>
                     </Card>
                   </div>
                 )}
@@ -184,33 +240,73 @@ export default function WorkspacesPage() {
                                     return (
                                         <Card 
                                             key={ws.id} 
-                                            className={`flex flex-col transition-all hover:shadow-lg border-border`}
+                                            className="group transition-all hover:shadow-lg border-border"
                                         >
-                                            <div 
-                                                className="flex-grow cursor-pointer"
-                                                onClick={() => handleSelectWorkspace(ws.id)}
-                                            >
-                                                <CardHeader>
-                                                    <CardTitle className="flex items-center gap-2"><Building /> {ws.name}</CardTitle>
-                                                    <CardDescription>Contact: {contact?.name || "Unknown"}</CardDescription>
-                                                </CardHeader>
-                                            </div>
-                                            <CardFooter className="p-2 border-t justify-end">
+                                            <CardContent className="p-0">
+                                                <div 
+                                                    className="p-6 cursor-pointer"
+                                                    onClick={() => handleSelectWorkspace(ws.id)}
+                                                >
+                                                    <div className="flex items-start justify-between mb-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={cn(
+                                                                "h-10 w-10 rounded-lg flex items-center justify-center",
+                                                                category === 'Insurer' && "bg-green-100",
+                                                                category === 'Lawyer' && "bg-blue-100",
+                                                                category === 'Rental Company' && "bg-purple-100"
+                                                            )}>
+                                                                {category === 'Insurer' && <Briefcase className="h-5 w-5 text-green-600" />}
+                                                                {category === 'Lawyer' && <Scale className="h-5 w-5 text-blue-600" />}
+                                                                {category === 'Rental Company' && <Car className="h-5 w-5 text-purple-600" />}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-semibold">{ws.name}</h4>
+                                                                <p className="text-sm text-muted-foreground">{contact?.name || "No contact assigned"}</p>
+                                                            </div>
+                                                        </div>
+                                                        <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    </div>
+                                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                                        <div className="flex items-center gap-1">
+                                                            <Activity className="h-3 w-3" />
+                                                            <span>Active</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <Clock className="h-3 w-3" />
+                                                            <span>Last accessed today</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="border-t px-4 py-2 bg-muted/30 flex items-center justify-end gap-2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 px-2 text-xs"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openUserManagement(ws);
+                                                        }}
+                                                    >
+                                                        <Users className="mr-1 h-3 w-3" /> Users
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 px-2 text-xs"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openEditForm(ws);
+                                                        }}
+                                                    >
+                                                        <Settings2 className="mr-1 h-3 w-3" /> Settings
+                                                    </Button>
                                                 <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                        <MoreVertical className="h-4 w-4" />
+                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                                        <MoreVertical className="h-3 w-3" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem onClick={() => openUserManagement(ws)}>
-                                                        <Users className="mr-2 h-4 w-4" /> User Management
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => openEditForm(ws)}>
-                                                        <Edit className="mr-2 h-4 w-4" /> Edit
-                                                    </DropdownMenuItem>
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
                                                             <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
@@ -230,7 +326,8 @@ export default function WorkspacesPage() {
                                                     </AlertDialog>
                                                 </DropdownMenuContent>
                                                 </DropdownMenu>
-                                            </CardFooter>
+                                                </div>
+                                            </CardContent>
                                         </Card>
                                     )
                                 })}

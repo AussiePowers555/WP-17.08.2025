@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSessionStorage } from "@/hooks/use-session-storage"
 import { useWorkspace } from "@/contexts/WorkspaceContext"
+import { WorkspaceSwitcher } from "@/components/workspace-switcher"
 import {
     Sidebar,
     SidebarHeader,
@@ -15,6 +16,7 @@ import {
     SidebarFooter,
     SidebarGroup,
     SidebarGroupLabel,
+    SidebarSeparator,
 } from "@/components/ui/sidebar"
 import {
     Home,
@@ -35,7 +37,7 @@ import {
 
 const mainNavItems = [
     { href: "/", label: "Dashboard", icon: Home, adminOnly: true },
-    { href: "/workspaces", label: "Workspaces", icon: LayoutGrid, adminOnly: true },
+    { href: "/workspaces", label: "Workspace Directory", icon: LayoutGrid, adminOnly: true },
     { href: "/cases", label: "Case Management", icon: Briefcase, adminOnly: true },
     { href: "/fleet", label: "Fleet Tracking", icon: Bike, adminOnly: true },
     { href: "/financials", label: "Financials", icon: Banknote, adminOnly: true },
@@ -74,10 +76,16 @@ export function Nav() {
     return (
         <div className="flex h-full flex-col">
             <SidebarHeader>
-                <Link href={!isAdmin ? "/interactions" : "/"} className="flex items-center gap-2">
+                <Link href={!isAdmin ? "/interactions" : "/"} className="flex items-center gap-2 mb-4">
                     <Bike className="h-6 w-6 text-primary" />
                     <span className="text-lg font-semibold">PBikeRescue</span>
                 </Link>
+                {isAdmin && (
+                    <>
+                        <WorkspaceSwitcher className="w-full" />
+                        <SidebarSeparator className="mt-4" />
+                    </>
+                )}
             </SidebarHeader>
             <SidebarContent className="flex-1">
                 <SidebarMenu>

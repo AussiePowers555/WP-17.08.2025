@@ -4,153 +4,202 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-- **Start development server**: `npm run dev` (runs on port 9015 with Turbopack)
-- **Start Cloudflare tunnel**: `cloudflared tunnel --url http://localhost:9015` (manual setup)
-- **Update environment with tunnel URL**: `node setup-cloudflare-url.js https://your-url.trycloudflare.com`
+### Core Development
+- **Start development server**: `npm run dev` (runs on port 3000 with Turbopack)
 - **Build for production**: `npm run build`
-- **Start production server**: `npm start`
+- **Start production server**: `npm start` or `npm run start:prod`
 - **Run linting**: `npm run lint`
+- **Fix linting issues**: `npm run lint:fix`
 - **Run type checking**: `npm run typecheck`
-- **Run tests**: Tests use Playwright - configuration in `playwright.config.ts`
+- **Full test suite**: `npm run test:full` (runs lint + typecheck)
 
-## Deployment Process
+### Testing
+- **Run E2E tests**: `npm run test:e2e` (Playwright tests)
+- **Run tests with UI**: `npm run test:e2e:ui`
+- **Run specific test**: `npx playwright test tests/[test-file].spec.ts`
 
-### Auto-Deploy to Vercel After Bug Fixes
-**IMPORTANT**: When fixing bugs, always deploy changes to Vercel automatically:
+### Database & Health Checks
+- **Check database health**: `npm run db:health`
+- **Setup PostgreSQL**: `npm run setup:postgresql`
+- **Verify PostgreSQL**: `npm run verify:postgresql`
 
-1. **After fixing bugs and testing locally**:
-   ```bash
-   git add -A
-   git commit -m "fix: [description of bug fix]"
-   git push origin master
-   vercel --prod
-   ```
+### External Testing with Cloudflare Tunnel
+- **Start tunnel**: `npm run tunnel` or `cloudflared tunnel --url http://localhost:3000`
+- **Setup tunnel URL**: `npm run tunnel:setup` or `node setup-cloudflare-url.js https://your-url.trycloudflare.com`
+- **Setup local IP**: `npm run setup-local-ip`
+- **Auto-restart dev server**: `npm run dev:auto-restart` (for env changes)
 
-2. **Vercel Auto-Deployment Workflow**:
-   - Fix and test bugs locally
-   - Commit changes with descriptive message
-   - Push to GitHub repository
-   - Deploy to production with `vercel --prod`
-   - Vercel will automatically build and deploy the latest changes
+## Architecture Overview
 
-3. **Pre-deployment Checklist**:
-   - ✅ All TypeScript errors resolved (`npm run typecheck`)
-   - ✅ Linting passes (`npm run lint`)
-   - ✅ Local testing confirms fix works
-   - ✅ Database migrations applied if needed
-   - ✅ Environment variables updated in Vercel dashboard if needed
+### Tech Stack
+- **Framework**: Next.js 15.3.3 with TypeScript
+- **Database**: PostgreSQL (Neon) via `pg` driver
+- **Authentication**: Custom JWT-based auth in `src/lib/auth.ts`
+- **UI Components**: Radix UI primitives with custom components in `src/components/ui/`
+- **Styling**: Tailwind CSS with class-variance-authority
+- **Email**: Nodemailer for email service
+- **PDF Generation**: pdf-lib and pdfkit
+- **Forms**: JotForm integration for external forms
+- **Payment**: Stripe integration
 
-## Testing Environment Setup with Cloudflare Tunnel
-
-This is our testing environment for email signatures and PDF generation from prefilled forms being signed by customers.
-
-### Cloudflare Tunnel Setup for External Testing
-1. **Install cloudflared:**
-   ```bash
-   # Download from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
-   # Or use chocolatey: choco install cloudflared
-   ```
-
-2. **Start Cloudflare tunnel:**
-   ```bash
-   cloudflared tunnel --url http://localhost:9015
-   ```
-
-3. **Update environment variable:**
-   - Copy the HTTPS forwarding URL from cloudflared (e.g., `https://abc123.trycloudflare.com`)
-   - Update `NEXT_PUBLIC_BASE_URL` in `.env.local` with the tunnel URL
-   - Or use the helper script: `node setup-cloudflare-url.js https://abc123.trycloudflare.com`
-
-4. **Restart development server:**
-   ```bash
-   npm run dev
-   ```
-
-### Testing Capabilities with Cloudflare Tunnel
-- **Email Signature Testing**: Send emails with form links accessible from any device
-- **PDF Generation Testing**: Test PDF generation from prefilled customer forms
-- **External Form Access**: Allow customers to access and sign documents from mobile devices
-- **JotForm Integration**: Test webhook endpoints with external URLs
-- **Cross-device Testing**: Test the application from different devices and networks
-
-### Testing Workflow
-1. Start local development server (`npm run dev`)
-2. Start Cloudflare tunnel on port 9015 (`cloudflared tunnel --url http://localhost:9015`)
-3. Update `.env.local` with tunnel URL (`node setup-cloudflare-url.js https://your-url.trycloudflare.com`)
-4. Restart development server to pick up new environment variable
-5. Test email links and form submissions from external devices
-6. Verify PDF generation and signature workflows
-
-### Important Notes
-- Keep cloudflared window open during testing sessions
-- Cloudflare tunnel URL changes each restart (free tier limitation)
-- All form links in emails will use the tunnel URL for external access
-
-### Auto-Restart Development Server
-
-**CRITICAL**: When testing code updates, the development server must be restarted to pick up environment variable changes:
-
-#### When Auto-Restart is Required:
-- After updating `NEXT_PUBLIC_BASE_URL` in `.env.local`
-- After running `npm run setup-local-ip`
-- After running `node setup-cloudflare-url.js`
-- When switching between local/tunnel/network IP testing
-
-#### Auto-Restart Commands:
-```bash
-# Stop current server (Ctrl+C) then restart:
-npm run dev
-
-# Or use auto-restart for .env changes:
-npm run dev:auto-restart
+### Project Structure
+```
+src/
+├── app/                      # Next.js App Router pages and API routes
+│   ├── (app)/               # Authenticated app pages
+│   │   ├── cases/           # Case management system
+│   │   ├── fleet/           # Bike fleet management
+│   │   ├── workspaces/      # Workspace management
+│   │   └── admin/           # Admin dashboard
+│   ├── (auth)/              # Auth-related pages
+│   ├── api/                 # API endpoints
+│   └── forms/               # External form pages
+├── components/              # Reusable React components
+├── contexts/                # React contexts (Auth, Workspace)
+├── lib/                     # Core utilities and services
+│   ├── database.ts          # Database connection and queries
+│   ├── auth.ts              # Authentication utilities
+│   ├── email-service.ts     # Email functionality
+│   └── pdf-generator.ts     # PDF generation
+└── types/                   # TypeScript type definitions
 ```
 
-#### Testing Workflow with Auto-Restart:
-1. Make environment changes (IP/URL updates)
-2. **ALWAYS restart dev server** - environment variables only load on startup
-3. Test email signature links from external devices
-4. Verify PDF generation works with new URLs
+### Key Services
 
-**Remember**: Next.js only reads environment variables at startup, so restart is mandatory for testing!
-- PDF generation and signature processes are tested through the Cloudflare tunnel
+#### Database (`src/lib/database.ts`, `src/lib/postgres-db.ts`)
+- Connection pooling with `pg.Pool`
+- Schema defined in `src/lib/postgres-schema.ts`
+- Migrations in `src/lib/database/migrations/`
+
+#### Authentication (`src/lib/auth.ts`, `src/lib/server-auth.ts`)
+- JWT-based session management
+- Password hashing with bcryptjs
+- Session validation middleware
+
+#### Case Management System
+- Core functionality in `src/app/(app)/cases/`
+- Document management and signature workflows
+- Integration with JotForm for external forms
+
+#### Workspace System
+- Multi-tenant architecture with workspace isolation
+- User management per workspace
+- Shared cases between workspaces
+
+## Deployment Workflow
+
+### Vercel Production Deployment
+```bash
+# After testing locally
+git add -A
+git commit -m "fix: [description]"
+git push origin master
+vercel --prod
+```
+
+### Pre-deployment Checklist
+- ✅ TypeScript errors resolved: `npm run typecheck`
+- ✅ Linting passes: `npm run lint`
+- ✅ Local testing confirms fix
+- ✅ Environment variables updated in Vercel if needed
+
+## Environment Variables
+
+Required in `.env.local`:
+- `DATABASE_URL`: PostgreSQL connection string (Neon)
+- `JWT_SECRET`: Secret for JWT signing
+- `NEXT_PUBLIC_BASE_URL`: Base URL for the application
+- `STRIPE_SECRET_KEY`: Stripe API key (if using payments)
+- `JOTFORM_API_KEY`: JotForm API key (if using forms)
 
 ## Bug Management Protocol
 
-### Automated Bug Scanning and Fixing Workflow
-On startup, Claude Code Terminal will:
+### Automated Bug Workflow
+1. **Scan bug_report.md** on startup for open bugs
+2. **Fix and test** bugs using Playwright tests
+3. **Auto-deploy** to Vercel after local tests pass
+4. **Track all changes** in bug_report.md with timestamps
 
-1. **Scan bug_report.md** for documented bugs
-2. **Identify the next bug without a known fix** and prompt: "Should I attempt to fix the following bug? [Bug ID: {id}, Description: {description}]"
-3. **Maintain bug_report.md** by:
-   - Logging all known bugs with unique ID, description, status (open/fixed), and date/time of discovery
-   - Documenting each fix attempt with code changes, signed "Claude Code Terminal" with date/time
-   - Using Playwright to develop and run tests to verify bug fixes
-   - Logging test results (pass/fail) with signature and date/time
+### Bug Fix Process
+```bash
+# Fix bug locally
+# Run tests
+npm run test:e2e
 
-4. **After local tests pass**, automatically:
-   - Commit changes to GitHub with message "fix: {description} - Bug ID: {id}"
-   - Push to GitHub repository
-   - Deploy to Vercel production using `vercel --prod`
-   - Log commit hash and deployment URL with signature and date/time
+# If tests pass, deploy
+git add -A
+git commit -m "fix: [bug description] - Bug ID: [id]"
+git push origin master
+vercel --prod
+```
 
-5. **After deployment**, ask user: "Is the production version on Vercel functioning as intended? [Bug ID: {id}, Description: {description}]"
-   - If **YES**: Mark bug as FIXED in bug_report.md, log production verification with signature and date/time
-   - If **NO**: Continue debugging, attempting fixes, and redeploying until resolved
+All bug tracking entries signed as "Claude Code Terminal" with date/time.
 
-6. **Sign every log entry** as "Claude Code Terminal" with current date/time
-7. **Auto-deployment required**: All bug fixes must be automatically pushed to GitHub and deployed to Vercel for production testing
+## Feature Documentation
 
-## Memory Log
+### IMPORTANT: Read Before Making Changes
+Comprehensive documentation for all pages and features is available in the `docs/` directory. **Always consult this documentation before editing or adding features.**
 
-### Deployment and Infrastructure
-- I am working to perfect my Vercel deployment to work perfectly with my Neon database
-- Currently getting errors when clicking on different menu buttons
-- Need to perfect the schema, business logic, functions so this rental bike app works perfectly and is production ready for release without client experiencing any bugs
+### Documentation Structure
+```
+docs/
+├── README.md                 # Main documentation index
+└── pages/
+    ├── dashboard/           # Dashboard page documentation
+    ├── cases/              # Cases management documentation
+    ├── fleet/              # Fleet management documentation
+    ├── workspaces/         # Workspace system documentation
+    ├── admin/              # Admin features documentation
+    └── [other pages]/      # Additional page documentation
+```
 
-- On startup, scan bug_report.md for documented bugs. Identify the next bug without a known fix and prompt the user: "Should I attempt to fix the following bug? [Insert bug description]." Maintain bug_report.md by:
+### How to Use Feature Documentation
 
-Logging all known bugs with a unique ID, description, status (open/fixed), and date/time of discovery.
-Documenting each fix attempt, including code changes, with your signature "Claude Code Terminal" and the date/time.
-Using Playwright to develop and run tests to verify the bug fix. Log test results (pass/fail) with your signature and date/time.
-After tests pass, ask the user: "Is this bug fixed? [Insert bug description]." If the user confirms "yes," mark the bug as fixed in bug_report.md and ignore it henceforth. If "no," continue testing and attempting fixes, logging each attempt.
-Sign every log entry (bug discovery, fix attempt, test result, user confirmation) as "Claude Code Terminal" with the current date/time.
+#### Before Editing Features
+1. **Read the page documentation**: `docs/pages/[page-name]/README.md`
+2. **Check button/feature docs**: `docs/pages/[page-name]/[feature-name].md`
+3. **Understand data flow**: Review technical implementation sections
+4. **Check related pages**: Follow cross-references to understand impact
+
+#### When Adding New Features
+1. **Study existing patterns**: Read similar feature documentation
+2. **Follow conventions**: Match existing UI/UX patterns
+3. **Document new features**: Create new .md files for additions
+4. **Update page README**: Add new features to overview
+
+#### Documentation Updates
+- **Update docs when**: Adding features, changing functionality, fixing bugs
+- **Keep docs current**: Documentation should reflect actual implementation
+- **Use for context**: Reference docs in todo lists and planning
+
+### Quick Links to Key Documentation
+- [Application Overview](./docs/README.md)
+- [Dashboard Features](./docs/pages/dashboard/README.md)
+- [Cases Management](./docs/pages/cases/README.md)
+- [Fleet Management](./docs/pages/fleet/README.md)
+
+## Standard Development Workflow
+
+1. **Research & Planning**
+   - Read relevant documentation in `docs/pages/`
+   - Understand existing features and patterns
+   - Write a detailed plan with todo items
+   - **IMPORTANT: Present the complete plan to the user**
+   - **You MUST ask: "Do you approve this plan?"**
+   - **Wait for the user to type "yes" before proceeding to implementation**
+   - **Never start coding without explicit approval**
+
+2. **Implementation** (Only after user approval)
+   - Follow existing code conventions
+   - Keep changes simple and focused
+   - Mark todos complete as you progress
+
+3. **Documentation**
+   - Update relevant .md files in `docs/`
+   - Document new buttons/features added
+   - Keep documentation accurate
+
+4. **Review**
+   - Verify changes match documentation
+   - Ensure all todos are complete
+   - Add summary of changes made
