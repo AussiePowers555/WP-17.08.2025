@@ -1270,6 +1270,22 @@ const PostgreSQLService = {
     }
   },
 
+  deleteUserAccount: async (id: string): Promise<boolean> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      // First delete from workspace_users table (foreign key constraint)
+      await client.query('DELETE FROM workspace_users WHERE user_id = $1', [id]);
+      
+      // Then delete from users table
+      const result = await client.query('DELETE FROM users WHERE id = $1', [id]);
+      return (result.rowCount ?? 0) > 0;
+    } finally {
+      client.release();
+    }
+  },
+
   // Signature Token methods
   createSignatureToken: async (tokenData: any): Promise<SignatureToken> => {
     ensureServerSide();

@@ -188,7 +188,7 @@ export default function CasesListClient({
   }
 
   const handleDeleteCase = async (caseId: string, caseNumber: string) => {
-    if (!confirm(`Are you sure you want to delete case ${caseNumber}? This will also delete all associated documents and cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to permanently delete case ${caseNumber}? This will also delete all associated documents and cannot be undone.`)) {
       return;
     }
 
@@ -201,6 +201,9 @@ export default function CasesListClient({
       if (response.ok) {
         const result = await response.json();
         console.log('Case deleted:', result);
+        
+        // Show success message
+        alert(`Case ${caseNumber} has been permanently deleted`);
         
         // Trigger on-demand revalidation
         await fetch('/api/revalidate/cases', { method: 'POST' });

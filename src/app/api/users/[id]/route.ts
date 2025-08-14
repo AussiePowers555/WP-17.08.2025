@@ -112,19 +112,29 @@ export async function DELETE(
     const resolvedParams = await params;
     const { id } = resolvedParams;
     
+    console.log(`[DELETE /api/users/${id}] Starting user deletion`);
+    
     await ensureDatabaseInitialized();
     
-    await DatabaseService.updateUserAccount(id, {
-      status: 'deleted',
-      updated_at: new Date() as any
-    });
+    // Actually delete the user from the database
+    const deleted = await DatabaseService.deleteUserAccount(id);
+    
+    if (!deleted) {
+      console.error(`[DELETE /api/users/${id}] User not found or already deleted`);
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+    
+    console.log(`[DELETE /api/users/${id}] User deleted successfully`);
     
     return NextResponse.json({
       success: true,
-      message: 'User deleted successfully'
+      message: 'User permanently deleted'
     });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error(`[DELETE /api/users/${id}] Error:`, error);
     return NextResponse.json(
       { success: false, error: 'Failed to delete user' },
       { status: 500 }

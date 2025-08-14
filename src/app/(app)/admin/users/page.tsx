@@ -138,7 +138,7 @@ export default function UsersPage() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+    if (!confirm('Are you sure you want to permanently delete this user? This action cannot be undone.')) return;
     
     try {
       const response = await fetch(`/api/users/${userId}`, {
@@ -149,6 +149,7 @@ export default function UsersPage() {
       
       const data = await response.json();
       if (data.success) {
+        alert('User deleted successfully');
         fetchUsers();
       } else {
         alert(data.error || 'Failed to delete user');
