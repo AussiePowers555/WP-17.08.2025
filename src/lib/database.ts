@@ -999,6 +999,19 @@ const PostgreSQLService = {
         WHERE is_deleted = false OR is_deleted IS NULL
         ORDER BY last_updated DESC
       `);
+      
+      console.log(`📊 [DatabaseService.getAllCases] Retrieved ${result.rows.length} active cases`);
+      
+      // Log first few cases for debugging
+      if (result.rows.length > 0) {
+        const sample = result.rows.slice(0, 3).map(row => ({
+          id: row.id,
+          case_number: row.case_number,
+          is_deleted: row.is_deleted
+        }));
+        console.log(`📋 [DatabaseService.getAllCases] Sample cases:`, sample);
+      }
+      
       return result.rows.map(mapDbRowToCaseFrontend);
     } finally {
       client.release();
@@ -1092,6 +1105,26 @@ const PostgreSQLService = {
     const client = await pool!.connect();
     
     try {
+      console.log(`🗑️ [DatabaseService.deleteCase] Soft deleting case with id: ${id}`);
+      
+      // First check if the case exists and its current state
+      const checkResult = await client.query(
+        'SELECT id, case_number, is_deleted FROM cases WHERE id = $1',
+        [id]
+      );
+      
+      if (checkResult.rows.length === 0) {
+        console.log(`❌ [DatabaseService.deleteCase] Case not found with id: ${id}`);
+        return false;
+      }
+      
+      const currentCase = checkResult.rows[0];
+      console.log(`📋 [DatabaseService.deleteCase] Current case state:`, {
+        id: currentCase.id,
+        case_number: currentCase.case_number,
+        is_deleted: currentCase.is_deleted
+      });
+      
       // Soft delete - mark as deleted instead of removing
       const result = await client.query(`
         UPDATE cases 
@@ -1099,8 +1132,24 @@ const PostgreSQLService = {
             deleted_at = CURRENT_TIMESTAMP,
             last_updated = CURRENT_TIMESTAMP
         WHERE id = $1
+        RETURNING id, case_number, is_deleted, deleted_at
       `, [id]);
+      
+      if (result.rows.length > 0) {
+        console.log(`✅ [DatabaseService.deleteCase] Successfully soft deleted case:`, {
+          id: result.rows[0].id,
+          case_number: result.rows[0].case_number,
+          is_deleted: result.rows[0].is_deleted,
+          deleted_at: result.rows[0].deleted_at
+        });
+      } else {
+        console.log(`❌ [DatabaseService.deleteCase] No rows updated for id: ${id}`);
+      }
+      
       return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      console.error(`❌ [DatabaseService.deleteCase] Error deleting case ${id}:`, error);
+      throw error;
     } finally {
       client.release();
     }
