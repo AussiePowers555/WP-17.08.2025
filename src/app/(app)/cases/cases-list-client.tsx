@@ -978,13 +978,28 @@ export default function CasesListClient({
                           <TableCell>{c.lastUpdated instanceof Date ? c.lastUpdated.toLocaleString() : c.lastUpdated}</TableCell>
                           <TableCell>
                             <div className="flex gap-2 flex-wrap">
-                              <Button variant="outline" size="sm" onClick={() => router.push(`/cases/${c.id}`)}>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => {
+                                  const identifier = c.id || c.caseNumber;
+                                  console.log(`[View Details] Navigating to case: ${identifier} (ID: ${c.id}, Case Number: ${c.caseNumber})`);
+                                  router.push(`/cases/${identifier}`);
+                                }}
+                              >
                                 View Details
                               </Button>
                               <Button
                                 variant="destructive"
                                 size="sm"
-                                onClick={() => handleDeleteCase(c.id, c.caseNumber)}
+                                onClick={() => {
+                                  if (!c.id && !c.caseNumber) {
+                                    console.error('[Delete] No identifier available for case:', c);
+                                    alert('Cannot delete case: No case ID or number available');
+                                    return;
+                                  }
+                                  handleDeleteCase(c.id, c.caseNumber);
+                                }}
                                 disabled={isDeleting}
                               >
                                 {isDeleting ? (
@@ -1019,7 +1034,15 @@ export default function CasesListClient({
                                     {statusOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
-                                <Button variant="outline" size="sm" onClick={() => router.push(`/cases/${c.id}`)}>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => {
+                                    const identifier = c.id || c.caseNumber;
+                                    console.log(`[Mobile View] Navigating to case: ${identifier} (ID: ${c.id}, Case Number: ${c.caseNumber})`);
+                                    router.push(`/cases/${identifier}`);
+                                  }}
+                                >
                                   View
                                 </Button>
                               </div>

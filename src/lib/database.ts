@@ -806,6 +806,11 @@ function ensureServerSide() {
 
 // Helper function to map database row to Case interface
 function mapDbRowToCase(row: any): Case {
+  // Log if ID is missing
+  if (!row.id) {
+    console.warn(`⚠️ [mapDbRowToCase] Case missing ID - case_number: ${row.case_number}`);
+  }
+  
   return {
     id: row.id,
     case_number: row.case_number,
@@ -2219,7 +2224,17 @@ const PostgreSQLService = {
   // Async wrapper methods for ISR compatibility
   getCasesAsync: async (workspaceId?: string | null): Promise<CaseFrontend[]> => {
     ensureServerSide();
-    return DatabaseService.getAllCases();
+    const cases = await DatabaseService.getAllCases();
+    
+    // Debug logging for missing IDs
+    const casesWithoutIds = cases.filter(c => !c.id);
+    if (casesWithoutIds.length > 0) {
+      console.warn(`⚠️ [getCasesAsync] ${casesWithoutIds.length} cases missing IDs:`, 
+        casesWithoutIds.map(c => ({ caseNumber: c.caseNumber, id: c.id }))
+      );
+    }
+    
+    return cases;
   },
 
   getBikesAsync: async (workspaceId?: string | null): Promise<BikeFrontend[]> => {
