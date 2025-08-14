@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
 
+// Allow GET for easy browser access
+export async function GET(request: NextRequest) {
+  return POST(request);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const connectionString = process.env.DATABASE_URL;
