@@ -158,7 +158,10 @@ export function CaseDetailForm({ caseData, onCaseUpdate, contacts, onAddContact 
     setIsSaving(true);
     try {
       const values = form.getValues();
-      await onCaseUpdate(values);
+      await onCaseUpdate({
+        ...values,
+        workspaceId: values.workspaceId === null ? undefined : values.workspaceId
+      });
       setLastSaved(new Date());
     } catch (error) {
       console.error('Manual save failed:', error);
@@ -171,7 +174,7 @@ export function CaseDetailForm({ caseData, onCaseUpdate, contacts, onAddContact 
   useEffect(() => {
     form.reset({
       ...caseData,
-      workspaceId: caseData.workspaceId || undefined,
+      workspaceId: caseData.workspaceId === null ? undefined : caseData.workspaceId,
       clientEmail: caseData.clientEmail || "",
       atFaultPartyEmail: caseData.atFaultPartyEmail || "",
     });
@@ -198,7 +201,10 @@ export function CaseDetailForm({ caseData, onCaseUpdate, contacts, onAddContact 
 
   const onSubmit = (values: CaseFormValues) => {
     setIsLoading(true);
-    onCaseUpdate(values); 
+    onCaseUpdate({
+      ...values,
+      workspaceId: values.workspaceId === null ? undefined : values.workspaceId
+    });
     setIsLoading(false);
   };
 

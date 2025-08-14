@@ -410,6 +410,33 @@ async function createTables() {
       )
     `);
 
+    // Workspace users junction table for many-to-many relationship
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS workspace_users (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        workspace_id UUID NOT NULL,
+        user_id UUID NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        display_name VARCHAR(255),
+        invited_by UUID,
+        invited_at TIMESTAMP WITH TIME ZONE,
+        joined_at TIMESTAMP WITH TIME ZONE,
+        is_active BOOLEAN DEFAULT TRUE,
+        permissions JSONB DEFAULT '{}',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES user_accounts (id) ON DELETE CASCADE,
+        FOREIGN KEY (invited_by) REFERENCES user_accounts (id) ON DELETE SET NULL,
+        UNIQUE(workspace_id, user_id)
+      )
+    `);
+
+    // Add display_name column to user_accounts if it doesn't exist
+    await client.query(`
+      ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS display_name VARCHAR(255)
+    `);
+
     // Create indexes for better performance
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_cases_case_number ON cases (case_number);
@@ -2234,6 +2261,257 @@ const PostgreSQLService = {
             updated_at = CURRENT_TIMESTAMP
         WHERE user_id = $1 AND first_login_at IS NULL
       `, [userId, ipAddress || null, userAgent || null]);
+    } finally {
+      client.release();
+    }
+  },
+
+  // Workspace User Management Methods
+  createWorkspaceUser: async (data: {
+    workspace_id: string;
+    user_id: string;
+    role: 'admin' | 'developer' | 'client';
+    display_name?: string;
+    invited_by?: string;
+  }): Promise<any> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      const result = await client.query(`
+        INSERT INTO workspace_users (
+          workspace_id, user_id, role, display_name,
+          invited_by, invited_at, joined_at, is_active
+        ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, NULL, TRUE)
+        ON CONFLICT (workspace_id, user_id)
+        DO UPDATE SET
+          role = EXCLUDED.role,
+          display_name = COALESCE(EXCLUDED.display_name, workspace_users.display_name),
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING *
+      `, [
+        data.workspace_id,
+        data.user_id,
+        data.role,
+        data.display_name || null,
+        data.invited_by || null
+      ]);
+
+      return result.rows[0];
+    } finally {
+      client.release();
+    }
+  },
+
+  getWorkspaceUsers: async (workspaceId: string): Promise<any[]> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      const result = await client.query(`
+        SELECT
+          wu.*,
+          u.email,
+          u.status as user_status,
+          u.last_login,
+          COALESCE(wu.display_name, u.display_name, u.email) as name,
+          inviter.email as invited_by_email
+        FROM workspace_users wu
+        JOIN user_accounts u ON wu.user_id = u.id
+        LEFT JOIN user_accounts inviter ON wu.invited_by = inviter.id
+        WHERE wu.workspace_id = $1 AND wu.is_active = TRUE
+        ORDER BY wu.role, wu.created_at
+      `, [workspaceId]);
+
+      return result.rows;
+    } finally {
+      client.release();
+    }
+  },
+
+  updateWorkspaceUser: async (
+    workspaceId: string,
+    userId: string,
+    updates: {
+      role?: string;
+      display_name?: string;
+      is_active?: boolean;
+      permissions?: any;
+    }
+  ): Promise<void> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      const setFields = [];
+      const values = [];
+      let paramCount = 1;
+
+      for (const [key, value] of Object.entries(updates)) {
+        setFields.push(`${key} = $${paramCount}`);
+        values.push(value);
+        paramCount++;
+      }
+
+      if (setFields.length > 0) {
+        setFields.push(`updated_at = CURRENT_TIMESTAMP`);
+        values.push(workspaceId, userId);
+
+        await client.query(`
+          UPDATE workspace_users
+          SET ${setFields.join(', ')}
+          WHERE workspace_id = $${paramCount} AND user_id = $${paramCount + 1}
+        `, values);
+      }
+    } finally {
+      client.release();
+    }
+  },
+
+  removeWorkspaceUser: async (workspaceId: string, userId: string): Promise<void> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      // Soft delete by setting is_active to false
+      await client.query(`
+        UPDATE workspace_users
+        SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE workspace_id = $1 AND user_id = $2
+      `, [workspaceId, userId]);
+    } finally {
+      client.release();
+    }
+  },
+
+  getUserWorkspaces: async (userId: string): Promise<any[]> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      const result = await client.query(`
+        SELECT
+          w.*,
+          wu.role,
+          wu.display_name,
+          wu.joined_at,
+          wu.permissions
+        FROM workspace_users wu
+        JOIN workspaces w ON wu.workspace_id = w.id
+        WHERE wu.user_id = $1 AND wu.is_active = TRUE
+        ORDER BY wu.joined_at DESC
+      `, [userId]);
+
+      return result.rows;
+    } finally {
+      client.release();
+    }
+  },
+
+  checkWorkspaceAccess: async (workspaceId: string, userId: string): Promise<{
+    hasAccess: boolean;
+    role?: string;
+    permissions?: any;
+  }> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      const result = await client.query(`
+        SELECT role, permissions
+        FROM workspace_users
+        WHERE workspace_id = $1 AND user_id = $2 AND is_active = TRUE
+      `, [workspaceId, userId]);
+
+      if (result.rows.length > 0) {
+        return {
+          hasAccess: true,
+          role: result.rows[0].role,
+          permissions: result.rows[0].permissions
+        };
+      }
+
+      return { hasAccess: false };
+    } finally {
+      client.release();
+    }
+  },
+
+  createUserAndAddToWorkspace: async (data: {
+    email: string;
+    display_name: string;
+    role: 'admin' | 'developer' | 'client';
+    workspace_id: string;
+    invited_by?: string;
+  }): Promise<{
+    user: UserAccount;
+    workspaceUser: any;
+    tempPassword: string;
+  }> => {
+    ensureServerSide();
+    const client = await pool!.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Generate password
+      const tempPassword = Math.random().toString(36).slice(-10);
+      
+      // Hash password
+      const CryptoJS = require('crypto-js');
+      const passwordHash = CryptoJS.SHA256(tempPassword + 'salt_pbr_2024').toString();
+      
+      // Create or get user account
+      let userResult = await client.query(
+        'SELECT * FROM user_accounts WHERE email = $1',
+        [data.email]
+      );
+
+      let user;
+      if (userResult.rows.length === 0) {
+        // Create new user
+        userResult = await client.query(`
+          INSERT INTO user_accounts (
+            email, password_hash, role, status, display_name, first_login
+          ) VALUES ($1, $2, $3, 'active', $4, TRUE)
+          RETURNING *
+        `, [data.email, passwordHash, 'workspace_user', data.display_name]);
+        user = userResult.rows[0];
+      } else {
+        user = userResult.rows[0];
+      }
+
+      // Add user to workspace
+      const workspaceUserResult = await client.query(`
+        INSERT INTO workspace_users (
+          workspace_id, user_id, role, display_name,
+          invited_by, invited_at, is_active
+        ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, TRUE)
+        ON CONFLICT (workspace_id, user_id)
+        DO UPDATE SET
+          role = EXCLUDED.role,
+          display_name = COALESCE(EXCLUDED.display_name, workspace_users.display_name),
+          is_active = TRUE,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING *
+      `, [
+        data.workspace_id,
+        user.id,
+        data.role,
+        data.display_name,
+        data.invited_by || null
+      ]);
+
+      await client.query('COMMIT');
+
+      return {
+        user,
+        workspaceUser: workspaceUserResult.rows[0],
+        tempPassword
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
     } finally {
       client.release();
     }
