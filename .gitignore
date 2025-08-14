@@ -43,4 +43,4 @@ next-env.d.ts
 # Local development files
 *.log
 temp/
-.tmp/
+.tmp/nul

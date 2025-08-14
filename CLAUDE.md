@@ -13,6 +13,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run type checking**: `npm run typecheck`
 - **Full test suite**: `npm run test:full` (runs lint + typecheck)
 
+### Cache Management & Fresh Builds
+
+**IMPORTANT: Always clear cache after updating features to ensure you see the latest changes!**
+
+#### Cache Clearing Commands
+- **Clean all build files**: `npm run clean` - Removes entire .next folder
+- **Clean cache only**: `npm run clean:cache` - Removes only .next/cache
+- **Clean everything**: `npm run clean:all` - Removes .next and node_modules cache
+- **Fresh dev server**: `npm run dev:fresh` - Cleans and starts fresh dev server
+- **Fresh production build**: `npm run build:fresh` - Cleans and creates fresh build
+
+#### When to Clear Cache
+- ✅ After updating React components or pages
+- ✅ After modifying API routes
+- ✅ After changing database schema or queries
+- ✅ When seeing stale data after updates
+- ✅ When browser shows old UI after code changes
+- ✅ After switching branches in git
+- ✅ When build errors occur unexpectedly
+
+#### Browser Cache Clearing
+- **Hard Refresh**: `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac)
+- **DevTools**: Open DevTools (F12) → Network tab → Check "Disable cache"
+- **Clear Site Data**: DevTools → Application → Storage → Clear site data
+
 ### Testing
 - **Run E2E tests**: `npm run test:e2e` (Playwright tests)
 - **Run tests with UI**: `npm run test:e2e:ui`
@@ -194,12 +219,94 @@ docs/
    - Keep changes simple and focused
    - Mark todos complete as you progress
 
-3. **Documentation**
+3. **Cache Clearing** (After feature updates)
+   - Run `npm run clean` to remove old build files
+   - Restart dev server with `npm run dev:fresh` for clean slate
+   - Clear browser cache with `Ctrl+Shift+R` or `Cmd+Shift+R`
+   - Verify changes are visible in browser
+
+4. **Documentation**
    - Update relevant .md files in `docs/`
    - Document new buttons/features added
    - Keep documentation accurate
 
-4. **Review**
+5. **Review**
    - Verify changes match documentation
    - Ensure all todos are complete
    - Add summary of changes made
+
+## Troubleshooting Cache Issues
+
+### Common Cache-Related Problems
+
+#### Problem: Changes not visible after updating code
+**Solution:**
+```bash
+# Stop the dev server (Ctrl+C)
+npm run clean        # Clear .next folder
+npm run dev:fresh    # Start with fresh cache
+```
+Then clear browser cache: `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac)
+
+#### Problem: "Module not found" errors after updates
+**Solution:**
+```bash
+npm run clean:all    # Clear all caches
+npm install          # Reinstall dependencies
+npm run dev:fresh    # Fresh start
+```
+
+#### Problem: Old API responses after endpoint changes
+**Solution:**
+1. Clear Next.js cache: `npm run clean`
+2. Clear browser cache and cookies
+3. Open DevTools → Network tab → Check "Disable cache"
+4. Restart dev server: `npm run dev:fresh`
+
+#### Problem: Stale static assets (images, styles)
+**Solution:**
+```bash
+npm run clean        # Clear build cache
+# For production:
+npm run build:fresh  # Fresh production build
+```
+
+#### Problem: TypeScript/ESLint errors on valid code
+**Solution:**
+```bash
+npm run clean:all    # Clear all caches
+npm run typecheck    # Verify types
+npm run dev          # Restart normally
+```
+
+### Quick Fix Commands
+```bash
+# Complete cache reset (nuclear option)
+npm run clean:all && npm install && npm run dev:fresh
+
+# Quick refresh for development
+npm run dev:fresh
+
+# For production deployment
+npm run build:fresh && npm run start
+```
+
+### Best Practices to Avoid Cache Issues
+1. **Always use `npm run dev:fresh` after:**
+   - Pulling changes from git
+   - Switching branches
+   - Major feature updates
+   - Database schema changes
+
+2. **Keep browser DevTools open during development:**
+   - Enable "Disable cache" in Network tab
+   - Use hard refresh regularly
+
+3. **For deployment:**
+   - Always use `npm run build:fresh` before deploying
+   - Clear CDN cache if using one
+   - Test in incognito/private browsing mode
+
+4. **Version control tip:**
+   - Add `.next` to `.gitignore` (should already be there)
+   - Never commit build artifacts

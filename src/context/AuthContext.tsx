@@ -56,8 +56,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userRole = role === 'admin' || role === 'developer' ? 'admin' : 'workspace';
       sessionStorage.setItem('role', JSON.stringify(userRole));
       
-      // Set active workspace
-      const activeWorkspace = workspaceId ?? 'MAIN';
+      // Set active workspace - for workspace_user, client, lawyer, rental_company ALWAYS use their assigned workspace
+      // Only admins/developers can have MAIN or switch workspaces
+      const isRestrictedRole = role === 'workspace_user' || role === 'client' || role === 'lawyer' || role === 'rental_company';
+      const activeWorkspace = isRestrictedRole && workspaceId 
+        ? workspaceId  // Force restricted roles to their workspace
+        : (workspaceId ?? 'MAIN');  // Admins can use MAIN or assigned workspace
+      
       sessionStorage.setItem('activeWorkspace', JSON.stringify(activeWorkspace));
       
       // Dispatch events for same-tab synchronization

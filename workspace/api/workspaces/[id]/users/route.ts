@@ -2,7 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService, ensureDatabaseInitialized, db } from '@/lib/database';
 import { authenticateRequest } from '@/lib/server-auth';
 import { v4 as uuidv4 } from 'uuid';
-import { hashPassword, generateTempPassword } from '@/lib/passwords';
+import crypto from 'crypto';
+
+// Helper function to generate temporary password
+function generateTempPassword(length = 12): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+}
+
+// Helper function to hash password
+function hashPassword(password: string): string {
+  const salt = process.env.PASSWORD_SALT || 'default-salt';
+  return crypto.createHash('sha256').update(password + salt).digest('hex');
+}
 
 // GET /api/workspaces/[id]/users - Get all users in a workspace
 export async function GET(
@@ -28,12 +44,12 @@ export async function GET(
         wu.display_name,
         wu.is_active,
         wu.joined_at,
-        COALESCE(wu.display_name, u.email) as name,
+        u.name,
         u.email,
         u.status as user_status,
         u.last_login
       FROM workspace_users wu
-      JOIN user_accounts u ON wu.user_id = u.id
+      JOIN users u ON wu.user_id = u.id
       WHERE wu.workspace_id = $1 AND wu.is_active = true
       ORDER BY wu.joined_at DESC
     `, [workspaceId]);
@@ -90,7 +106,7 @@ export async function POST(
 
       // Check if user already exists
       let userResult = await client.query(
-        'SELECT id, email FROM user_accounts WHERE email = $1',
+        'SELECT id, email FROM users WHERE email = $1',
         [email]
       );
 
@@ -104,11 +120,13 @@ export async function POST(
         // Use provided password or generate one
         tempPassword = password || generateTempPassword();
         const hashedPassword = hashPassword(tempPassword);
+        // Only require password change if password was auto-generated
+        const requiresPasswordChange = !password;
 
         await client.query(`
-          INSERT INTO user_accounts (id, email, password_hash, role, status, workspace_id)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `, [userId, email, hashedPassword, 'client', 'active', workspaceId]);
+          INSERT INTO users (id, email, name, password, role, status, requires_password_change, workspace_id)
+          VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+        `, [userId, email, display_name || email, hashedPassword, 'client', requiresPasswordChange, workspaceId]);
         
         isNewUser = true;
       } else {
@@ -131,9 +149,9 @@ export async function POST(
       } else {
         // Add user to workspace
         await client.query(`
-          INSERT INTO workspace_users (id, workspace_id, user_id, role, display_name, invited_by, invited_at, joined_at)
-          VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-        `, [uuidv4(), workspaceId, userId, role, display_name, authResult.user.id]);
+          INSERT INTO workspace_users (id, workspace_id, user_id, role, display_name, invited_by_email)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [uuidv4(), workspaceId, userId, role, display_name, authResult.user.email]);
       }
 
       await client.query('COMMIT');

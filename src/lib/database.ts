@@ -1933,15 +1933,47 @@ const PostgreSQLService = {
     const client = await pool!.connect();
     
     try {
+      // First get the case to link properly
+      const caseResult = await client.query(
+        'SELECT id, workspace_id FROM cases WHERE case_number = $1',
+        [interactionData.caseNumber]
+      );
+      
+      const caseInfo = caseResult.rows[0];
+      if (!caseInfo) {
+        throw new Error(`Case ${interactionData.caseNumber} not found`);
+      }
+      
+      // Insert into interactions table with proper case and workspace links
       const result = await client.query(`
-        INSERT INTO case_interactions (
-          case_number, source, method, situation, action, outcome, timestamp
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *
+        INSERT INTO interactions (
+          case_id, case_number, interaction_type, contact_name, 
+          situation, action_taken, outcome, priority, status, 
+          workspace_id, timestamp, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+        RETURNING 
+          id,
+          case_number,
+          contact_name as source,
+          interaction_type as method,
+          situation,
+          action_taken as action,
+          outcome,
+          timestamp,
+          created_at,
+          updated_at
       `, [
-        interactionData.caseNumber, interactionData.source, interactionData.method,
-        interactionData.situation, interactionData.action, interactionData.outcome,
-        interactionData.timestamp
+        caseInfo.id,                                      // case_id
+        interactionData.caseNumber,                       // case_number
+        interactionData.method?.toLowerCase() || 'call',  // interaction_type
+        interactionData.source || 'Client',               // contact_name
+        interactionData.situation,                        // situation
+        interactionData.action,                           // action_taken
+        interactionData.outcome,                          // outcome
+        'medium',                                         // priority
+        'completed',                                      // status
+        caseInfo.workspace_id,                           // workspace_id
+        interactionData.timestamp || new Date()          // timestamp
       ]);
 
       return result.rows[0];
@@ -1955,8 +1987,22 @@ const PostgreSQLService = {
     const client = await pool!.connect();
     
     try {
+      // Query from interactions table and map fields to match UI expectations
       const result = await client.query(
-        'SELECT * FROM case_interactions WHERE case_number = $1 ORDER BY timestamp DESC',
+        `SELECT 
+          id,
+          case_number,
+          contact_name as source,
+          interaction_type as method,
+          situation,
+          action_taken as action,
+          outcome,
+          timestamp,
+          created_at,
+          updated_at
+        FROM interactions 
+        WHERE case_number = $1 
+        ORDER BY timestamp DESC`,
         [caseNumber]
       );
       return result.rows;
@@ -1974,8 +2020,16 @@ const PostgreSQLService = {
       const values = [];
       let paramCount = 1;
 
+      // Map UI fields to database fields
+      const fieldMapping: any = {
+        source: 'contact_name',
+        method: 'interaction_type',
+        action: 'action_taken'
+      };
+
       for (const [key, value] of Object.entries(updates)) {
-        setFields.push(`${key} = $${paramCount}`);
+        const dbField = fieldMapping[key] || key;
+        setFields.push(`${dbField} = $${paramCount}`);
         values.push(value);
         paramCount++;
       }
@@ -1987,7 +2041,7 @@ const PostgreSQLService = {
       values.push(id);
 
       await client.query(`
-        UPDATE case_interactions
+        UPDATE interactions
         SET ${setFields.join(', ')}
         WHERE id = $${paramCount}
       `, values);
@@ -2001,7 +2055,7 @@ const PostgreSQLService = {
     const client = await pool!.connect();
     
     try {
-      const result = await client.query('DELETE FROM case_interactions WHERE id = $1', [id]);
+      const result = await client.query('DELETE FROM interactions WHERE id = $1', [id]);
       return (result.rowCount ?? 0) > 0;
     } finally {
       client.release();

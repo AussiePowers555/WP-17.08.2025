@@ -75,7 +75,11 @@ export default function CasesListClient({
     workspaceIdCtx, 
     workspaceNameCtx, 
     workspaceRole,
-    currentUser: currentUser?.email
+    currentUser: currentUser?.email,
+    currentUserRole: currentUser?.role,
+    currentUserWorkspaceId: currentUser?.workspaceId || currentUser?.workspace_id,
+    totalCases: initialCases.length,
+    hydratedCases: hydratedCases.length
   });
 
   // Sorting state
@@ -532,11 +536,13 @@ export default function CasesListClient({
     .filter(c => {
       // First apply workspace/user visibility rules
       let visibilityPassed = false;
+      let userWorkspaceId: string | undefined;
       
-      // If workspace user, they should only see cases in their workspace
-      if (currentUser?.role === 'workspace_user') {
-        // Workspace users see cases assigned to their workspace
-        const userWorkspaceId = currentUser.workspaceId || workspaceIdCtx;
+      // If workspace user or client, they should only see cases in their workspace
+      if (currentUser?.role === 'workspace_user' || currentUser?.role === 'client' || 
+          currentUser?.role === 'lawyer' || currentUser?.role === 'rental_company') {
+        // Workspace users/clients see cases assigned to their workspace
+        userWorkspaceId = currentUser.workspaceId || currentUser.workspace_id || workspaceIdCtx;
         visibilityPassed = c.workspaceId === userWorkspaceId;
         
         // Additional filter: if they have a contact ID, only show cases assigned to them
@@ -554,13 +560,16 @@ export default function CasesListClient({
         }
       }
       
-      // Debug logging
-      if (c.workspaceId) {
+      // Debug logging for first few cases
+      if (hydratedCases.indexOf(c) < 3) {
         console.log('[Filter Debug]', {
           caseNumber: c.caseNumber,
           caseWorkspaceId: c.workspaceId,
+          userWorkspaceId,
           workspaceIdCtx,
           userRole: currentUser?.role,
+          isNonAdminUser: currentUser?.role === 'workspace_user' || currentUser?.role === 'client' || 
+                         currentUser?.role === 'lawyer' || currentUser?.role === 'rental_company',
           visibilityPassed
         });
       }

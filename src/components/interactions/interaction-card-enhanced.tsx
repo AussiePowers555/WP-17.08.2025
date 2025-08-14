@@ -6,6 +6,8 @@ import { InteractionFeedView } from '@/types/interaction';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useToast } from '@/hooks/use-toast';
 import { 
   Phone, 
   Mail, 
@@ -63,7 +65,10 @@ export function InteractionCardEnhanced({
   compact = false
 }: InteractionCardEnhancedProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const Icon = interactionIcons[interaction.interactionType] || FileText;
   const StatusIcon = statusIcons[interaction.status] || CheckCircle;
@@ -253,19 +258,47 @@ export function InteractionCardEnhanced({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (confirm('Are you sure you want to delete this interaction?')) {
-                    onDelete(interaction.id);
-                  }
+                  setShowDeleteDialog(true);
                 }}
+                disabled={isDeleting}
                 className="gap-1 text-destructive hover:text-destructive"
               >
                 <Trash2 className="h-3 w-3" />
-                Delete
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </Button>
             )}
           </div>
         )}
       </CardContent>
+      
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Delete Interaction"
+        description={`Are you sure you want to delete this interaction? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={async () => {
+          setIsDeleting(true);
+          try {
+            await onDelete?.(interaction.id);
+            toast({
+              title: "Interaction deleted",
+              description: "The interaction has been successfully deleted.",
+            });
+          } catch (error) {
+            toast({
+              title: "Error",
+              description: "Failed to delete the interaction. Please try again.",
+              variant: "destructive",
+            });
+          } finally {
+            setIsDeleting(false);
+          }
+        }}
+      />
     </Card>
   );
 }

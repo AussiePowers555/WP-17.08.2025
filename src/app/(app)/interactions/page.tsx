@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { InteractionFeedView, InteractionFilters, InteractionSortOptions } from '@/types/interaction';
-import { getInteractions } from '@/lib/actions/interactions';
+import { getInteractionsSecure } from '@/lib/actions/interactions-secure';
 import { exportFilteredInteractions } from '@/lib/export-utils';
 import { InteractionCardEnhanced } from '@/components/interactions/interaction-card-enhanced';
 import { InteractionFiltersPanelEnhanced } from '@/components/interactions/interaction-filters-enhanced';
@@ -61,11 +61,23 @@ export default function InteractionsPage() {
   
   // Get workspace ID and contact ID based on user role
   const isAdmin = workspace.role === 'admin' || user?.role === 'admin' || user?.role === 'developer';
-  const isWorkspaceUser = user?.role === 'workspace_user' || (!isAdmin && user?.workspaceId);
-  const currentWorkspaceId = workspace.id || user?.workspaceId || 'MAIN';
+  const isClient = workspace.role === 'client' || user?.role === 'client';
+  const isWorkspaceUser = user?.role === 'workspace_user' || isClient || user?.role === 'lawyer' || user?.role === 'rental_company' || (!isAdmin && user?.workspaceId);
+  
+  // For client users, always use their workspace ID from user object
+  // The workspace context might not be set properly for client users
+  // Check both workspace_id and workspaceId as the server might use either
+  const userWorkspaceId = (user as any)?.workspace_id || (user as any)?.workspaceId || user?.workspaceId;
+  
+  // IMPORTANT: For workspace_user role, ALWAYS use their assigned workspace, never fall back to context
+  const currentWorkspaceId = isWorkspaceUser
+    ? userWorkspaceId  // Force workspace users to their assigned workspace only
+    : isAdmin 
+      ? (workspace.id || 'MAIN')  // Admins can switch workspaces
+      : userWorkspaceId || workspace.id || 'MAIN';  // Others use their workspace or context
   
   // For filtering:
-  // - Workspace users: filter by workspace ID to see all interactions in their workspace
+  // - Client/Workspace users: ALWAYS filter by their workspace ID
   // - Admin in MAIN workspace: undefined (show all)
   // - Admin in specific workspace: that workspace ID
   const filterWorkspaceId = isAdmin && currentWorkspaceId === 'MAIN' 
@@ -84,7 +96,27 @@ export default function InteractionsPage() {
         setRefreshing(true);
       }
 
-      const result = await getInteractions(pageNum, 20, filters, sort, filterWorkspaceId, filterContactId);
+      console.log('[DEBUG] Fetching interactions with:', {
+        user: user?.email,
+        userRole: user?.role,
+        userWorkspaceId: userWorkspaceId,
+        'user.workspace_id': (user as any)?.workspace_id,
+        'user.workspaceId': (user as any)?.workspaceId,
+        'user.workspaceId (direct)': user?.workspaceId,
+        workspaceContextRole: workspace.role,
+        workspaceContextId: workspace.id,
+        isClient,
+        isWorkspaceUser,
+        isAdmin,
+        currentWorkspaceId,
+        filterWorkspaceId,
+        filterContactId,
+        expectedWorkspace: user?.role === 'workspace_user' ? '571ab2ed-e9b0-42f4-a09c-2e74c2af7e6d' : 'varies'
+      });
+
+      // Workspace filtering is now handled securely on the server
+      // Pass the workspace filter for admins viewing specific workspaces
+      const result = await getInteractionsSecure(pageNum, 20, filters, sort, filterWorkspaceId);
       
       if (result.success && result.data) {
         if (reset) {
@@ -184,9 +216,28 @@ export default function InteractionsPage() {
   };
   
   // Handle interaction deleted
-  const handleInteractionDeleted = (interactionId: number) => {
-    setInteractions(prev => prev.filter(int => int.id !== interactionId));
-    setTotalCount(prev => prev - 1);
+  const handleInteractionDeleted = async (interactionId: number) => {
+    try {
+      // Call the database delete function
+      const response = await fetch('/api/interactions/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ interactionId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete interaction');
+      }
+
+      // Update UI state after successful deletion
+      setInteractions(prev => prev.filter(int => int.id !== interactionId));
+      setTotalCount(prev => prev - 1);
+    } catch (error) {
+      console.error('Error deleting interaction:', error);
+      throw error; // Re-throw to be handled by the component
+    }
   };
   
   // Initial load and filter/sort changes

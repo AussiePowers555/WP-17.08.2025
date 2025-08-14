@@ -21,7 +21,7 @@ export default function OnboardingPage() {
             setUser(data.user);
             // Check if user has already completed onboarding
             if (!data.user.firstLogin) {
-              router.push('/dashboard');
+              router.push('/');
               return;
             }
           } else {
@@ -46,7 +46,7 @@ export default function OnboardingPage() {
 
   const handleOnboardingComplete = () => {
     toast.success('Welcome aboard! Your account is all set up.');
-    router.push('/dashboard');
+    router.push('/');
   };
 
   if (loading) {

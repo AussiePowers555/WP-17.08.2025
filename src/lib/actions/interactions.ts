@@ -1,6 +1,6 @@
 'use server';
 
-import { sql } from '@vercel/postgres';
+import { db, ensureDatabaseInitialized } from '@/lib/database';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { 
   Interaction, 
@@ -15,7 +15,8 @@ import {
 // Database connection helper
 async function executeQuery(query: string, params: any[] = []) {
   try {
-    const result = await sql.query(query, params);
+    await ensureDatabaseInitialized();
+    const result = await db.query(query, params);
     return { success: true, data: result };
   } catch (error) {
     console.error('Database query error:', error);
@@ -46,9 +47,10 @@ export async function getInteractions(
     let paramIndex = 1;
     
     // Filter by workspace for all users (unless viewing MAIN/all)
-    if (workspaceId) {
-      // Filter interactions by workspace ID directly (not by case workspace)
-      whereConditions.push(`i.workspace_id = $${paramIndex++}`);
+    if (workspaceId && workspaceId !== 'MAIN') {
+      // Filter interactions by cases that belong to the workspace
+      // Cases have workspace_id directly on them
+      whereConditions.push(`c.workspace_id = $${paramIndex++}`);
       queryParams.push(workspaceId);
     }
     
@@ -124,7 +126,7 @@ export async function getInteractions(
       queryParams.push(`%${filters.rentalCompany}%`);
     }
     
-    const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
+    const whereClause = whereConditions.length > 0 ? whereConditions.join(' AND ') : '';
     
     // Build ORDER BY clause
     const orderBy = `ORDER BY i.${sort.field === 'timestamp' ? 'timestamp' : 
@@ -164,7 +166,8 @@ export async function getInteractions(
         i.created_by as "createdByEmail"
       FROM interactions i
       LEFT JOIN cases c ON i.case_id = c.id
-      ${whereClause}
+      WHERE (c.is_deleted = false OR c.is_deleted IS NULL)
+      ${whereClause ? 'AND ' + whereClause : ''}
       ${orderBy}
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
@@ -193,7 +196,8 @@ export async function getInteractions(
       SELECT COUNT(*) as total
       FROM interactions i
       LEFT JOIN cases c ON i.case_id = c.id
-      ${whereClause}
+      WHERE (c.is_deleted = false OR c.is_deleted IS NULL)
+      ${whereClause ? 'AND ' + whereClause : ''}
     `;
     
     const countResult = await executeQuery(countQuery, queryParams.slice(0, -2)); // Remove LIMIT and OFFSET params
@@ -521,7 +525,8 @@ export async function getRecentInteractions(
         i.created_by as "createdByName"
       FROM interactions i
       LEFT JOIN cases c ON i.case_id = c.id
-      ${whereClause}
+      WHERE (c.is_deleted = false OR c.is_deleted IS NULL)
+      ${whereClause ? 'AND ' + whereClause : ''}
       ORDER BY i.timestamp DESC
       LIMIT ${limitParamIndex}
     `;

@@ -91,6 +91,13 @@ export function WorkspaceUserManagement({
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [newUserCredentials, setNewUserCredentials] = useState<any>(null);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [passwordData, setPasswordData] = useState({
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   
   // New user form state
   const [newUser, setNewUser] = useState({
@@ -101,6 +108,7 @@ export function WorkspaceUserManagement({
     send_email: false
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   // Fetch workspace users
   useEffect(() => {
@@ -110,7 +118,9 @@ export function WorkspaceUserManagement({
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/workspaces/${workspaceId}/users`);
+      const response = await fetch(`/api/workspaces/${workspaceId}/users`, {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error('Failed to fetch users');
       
       const data = await response.json();
@@ -139,6 +149,7 @@ export function WorkspaceUserManagement({
       const response = await fetch(`/api/workspaces/${workspaceId}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           email: newUser.email,
           display_name: newUser.display_name,
@@ -185,6 +196,7 @@ export function WorkspaceUserManagement({
       const response = await fetch(`/api/workspaces/${workspaceId}/users`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ user_id: userId, ...updates })
       });
 
@@ -209,7 +221,7 @@ export function WorkspaceUserManagement({
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/users?userId=${userId}`,
-        { method: 'DELETE' }
+        { method: 'DELETE', credentials: 'include' }
       );
 
       if (!response.ok) {
@@ -222,6 +234,50 @@ export function WorkspaceUserManagement({
     } catch (error) {
       console.error('Error removing user:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to remove user');
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!passwordData.newPassword || !passwordData.confirmPassword) {
+      toast.error('Please fill in both password fields');
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      const response = await fetch(`/api/workspaces/${workspaceId}/users/${selectedUserId}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          password: passwordData.newPassword
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to change password');
+      }
+
+      toast.success('Password changed successfully');
+      setShowPasswordDialog(false);
+      setPasswordData({ newPassword: '', confirmPassword: '' });
+      setSelectedUserId(null);
+    } catch (error) {
+      console.error('Error changing password:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -450,6 +506,15 @@ export function WorkspaceUserManagement({
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => {
+                                setSelectedUserId(user.user_id);
+                                setShowPasswordDialog(true);
+                              }}
+                            >
+                              <Lock className="mr-2 h-4 w-4" />
+                              Change Password
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
                                 const newRole = prompt(
                                   'Select new role (admin, developer, client):',
                                   user.role
@@ -502,6 +567,7 @@ export function WorkspaceUserManagement({
               await fetch('/api/credentials/track-distribution', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({
                   user_email: newUserCredentials.email,
                   method,
@@ -515,6 +581,73 @@ export function WorkspaceUserManagement({
           }}
         />
       )}
+
+      {/* Password Change Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change User Password</DialogTitle>
+            <DialogDescription>
+              Enter a new password for the user. They will need to use this password on their next login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="newPassword"
+                  type={showNewPassword ? "text" : "password"}
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                  placeholder="Enter new password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type={showNewPassword ? "text" : "password"}
+                value={passwordData.confirmPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                placeholder="Confirm new password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowPasswordDialog(false);
+                setPasswordData({ newPassword: '', confirmPassword: '' });
+                setSelectedUserId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={isChangingPassword}
+            >
+              {isChangingPassword ? 'Changing...' : 'Change Password'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
