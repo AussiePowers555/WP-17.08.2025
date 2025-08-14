@@ -87,11 +87,16 @@ export async function POST(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { email, display_name, role } = body;
+    const { email, display_name, role, password, send_email = false } = body;
 
     // Validate role
     if (!['admin', 'developer', 'client'].includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    }
+
+    // Validate password if provided
+    if (password && password.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
 
     // Start transaction
@@ -112,13 +117,16 @@ export async function POST(
       if (userResult.rows.length === 0) {
         // Create new user
         userId = uuidv4();
-        tempPassword = generateTempPassword();
+        // Use provided password or generate one
+        tempPassword = password || generateTempPassword();
         const hashedPassword = hashPassword(tempPassword);
+        // Only require password change if password was auto-generated
+        const requiresPasswordChange = !password;
 
         await client.query(`
-          INSERT INTO users (id, email, name, password, role, status, requires_password_change)
-          VALUES ($1, $2, $3, $4, $5, 'active', true)
-        `, [userId, email, display_name || email, hashedPassword, 'client']);
+          INSERT INTO users (id, email, name, password, role, status, requires_password_change, workspace_id)
+          VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+        `, [userId, email, display_name || email, hashedPassword, 'client', requiresPasswordChange, workspaceId]);
         
         isNewUser = true;
       } else {

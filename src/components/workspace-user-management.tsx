@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -49,7 +50,10 @@ import {
   Copy,
   Users,
   ShieldCheck,
-  UserCog
+  UserCog,
+  Eye,
+  EyeOff,
+  Lock
 } from 'lucide-react';
 import { EnhancedCredentialsModal } from '@/components/enhanced-credentials-modal';
 
@@ -92,8 +96,11 @@ export function WorkspaceUserManagement({
   const [newUser, setNewUser] = useState({
     email: '',
     display_name: '',
-    role: 'client' as 'admin' | 'developer' | 'client'
+    password: '',
+    role: 'client' as 'admin' | 'developer' | 'client',
+    send_email: false
   });
+  const [showPassword, setShowPassword] = useState(false);
 
   // Fetch workspace users
   useEffect(() => {
@@ -117,8 +124,13 @@ export function WorkspaceUserManagement({
   };
 
   const handleAddUser = async () => {
-    if (!newUser.email || !newUser.display_name) {
+    if (!newUser.email || !newUser.display_name || !newUser.password) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (newUser.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
       return;
     }
 
@@ -127,7 +139,13 @@ export function WorkspaceUserManagement({
       const response = await fetch(`/api/workspaces/${workspaceId}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser)
+        body: JSON.stringify({
+          email: newUser.email,
+          display_name: newUser.display_name,
+          role: newUser.role,
+          password: newUser.password,
+          send_email: newUser.send_email
+        })
       });
 
       if (!response.ok) {
@@ -148,7 +166,8 @@ export function WorkspaceUserManagement({
       setShowCredentialsModal(true);
       
       // Reset form and refresh users
-      setNewUser({ email: '', display_name: '', role: 'client' });
+      setNewUser({ email: '', display_name: '', password: '', role: 'client', send_email: false });
+      setShowPassword(false);
       setShowAddDialog(false);
       fetchUsers();
       
@@ -284,6 +303,32 @@ export function WorkspaceUserManagement({
                       />
                     </div>
                     <div className="grid gap-2">
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Enter password (min 6 characters)"
+                          value={newUser.password}
+                          onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                          className="pr-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
                       <Label htmlFor="role">Role</Label>
                       <Select
                         value={newUser.role}
@@ -301,6 +346,21 @@ export function WorkspaceUserManagement({
                           <SelectItem value="admin">Administrator</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="send_email"
+                        checked={newUser.send_email}
+                        onCheckedChange={(checked) => 
+                          setNewUser({ ...newUser, send_email: checked as boolean })
+                        }
+                      />
+                      <Label 
+                        htmlFor="send_email" 
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        Send credentials via email (optional)
+                      </Label>
                     </div>
                   </div>
                   <DialogFooter>

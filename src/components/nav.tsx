@@ -62,6 +62,8 @@ export function Nav() {
     
     // Strictly check if user is admin or developer
     const isAdmin = currentUser?.role === "admin" || currentUser?.role === "developer";
+    // Check if user is restricted to a specific workspace
+    const isWorkspaceRestricted = currentUser?.workspace_id && currentUser?.workspace_id !== '';
     
     console.log('[Nav Debug]', { 
         userRole: currentUser?.role, 
@@ -80,9 +82,17 @@ export function Nav() {
                     <Bike className="h-6 w-6 text-primary" />
                     <span className="text-lg font-semibold">PBikeRescue</span>
                 </Link>
-                {isAdmin && (
+                {isAdmin && !isWorkspaceRestricted && (
                     <>
                         <WorkspaceSwitcher className="w-full" />
+                        <SidebarSeparator className="mt-4" />
+                    </>
+                )}
+                {isWorkspaceRestricted && (
+                    <>
+                        <div className="px-3 py-2 text-sm font-medium text-muted-foreground">
+                            Workspace: {currentUser?.workspace_name || 'Assigned Workspace'}
+                        </div>
                         <SidebarSeparator className="mt-4" />
                     </>
                 )}
