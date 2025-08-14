@@ -187,14 +187,18 @@ export default function CasesListClient({
     }
   }
 
-  const handleDeleteCase = async (caseId: string, caseNumber: string) => {
+  const handleDeleteCase = async (caseId: string | undefined, caseNumber: string) => {
     if (!confirm(`Are you sure you want to delete case ${caseNumber}? The case will be moved to trash where it can be restored or permanently deleted.`)) {
       return;
     }
 
+    // Use case ID if available, otherwise use case number
+    const identifier = caseId || caseNumber;
+    console.log(`[Delete] Using identifier: ${identifier} (ID: ${caseId}, Case Number: ${caseNumber})`);
+
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/cases/${caseId}/delete`, {
+      const response = await fetch(`/api/cases/${identifier}/delete`, {
         method: 'DELETE',
       });
 
@@ -980,7 +984,7 @@ export default function CasesListClient({
                               <Button
                                 variant="destructive"
                                 size="sm"
-                                onClick={() => handleDeleteCase(c.id!, c.caseNumber)}
+                                onClick={() => handleDeleteCase(c.id, c.caseNumber)}
                                 disabled={isDeleting}
                               >
                                 {isDeleting ? (
