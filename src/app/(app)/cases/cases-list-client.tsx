@@ -198,7 +198,8 @@ export default function CasesListClient({
 
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/cases/${identifier}/delete`, {
+      // Use the simple delete endpoint that actually works
+      const response = await fetch(`/api/cases/${identifier}/delete-simple`, {
         method: 'DELETE',
       });
 
