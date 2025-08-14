@@ -9,17 +9,20 @@ import { useWorkspaces, useContacts } from "@/hooks/use-database";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Building, PlusCircle, MoreVertical, Edit, Trash2 } from "lucide-react";
+import { Building, PlusCircle, MoreVertical, Edit, Trash2, Users } from "lucide-react";
 import type { WorkspaceFrontend as Workspace, ContactFrontend as Contact } from "@/lib/database-schema";
 import { NewWorkspaceForm } from "./new-workspace-form";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WorkspaceUserManagement } from '@/components/workspace-user-management';
+import { useAuth } from '@/context/AuthContext';
 
 const workspaceCategories: Contact['type'][] = ['Insurer', 'Lawyer', 'Rental Company'];
 
 export default function WorkspacesPage() {
+  const { user } = useAuth();
   const { data: workspaces, loading: workspacesLoading, error: workspacesError, create: createWorkspace, update: updateWorkspace, remove: deleteWorkspace } = useWorkspaces();
   const { data: contacts, loading: contactsLoading, error: contactsError } = useContacts();
   const { switchWorkspace } = useWorkspace();
@@ -28,6 +31,8 @@ export default function WorkspacesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [workspaceToEdit, setWorkspaceToEdit] = useState<Workspace | null>(null);
   const [activeTab, setActiveTab] = useState<Contact['type']>('Rental Company');
+  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
+  const [showUserManagement, setShowUserManagement] = useState(false);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -109,6 +114,11 @@ export default function WorkspacesPage() {
   const openEditForm = (workspace: Workspace) => {
     setWorkspaceToEdit(workspace);
     setIsFormOpen(true);
+  }
+
+  const openUserManagement = (workspace: Workspace) => {
+    setSelectedWorkspace(workspace);
+    setShowUserManagement(true);
   }
 
   if (!isClient || workspacesLoading || contactsLoading) {
@@ -194,6 +204,10 @@ export default function WorkspacesPage() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem onClick={() => openUserManagement(ws)}>
+                                                        <Users className="mr-2 h-4 w-4" /> User Management
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => openEditForm(ws)}>
                                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                                     </DropdownMenuItem>
@@ -249,6 +263,26 @@ export default function WorkspacesPage() {
                     activeCategory={activeTab}
                 />
             </DialogContent>
+        </Dialog>
+
+        {/* User Management Dialog */}
+        <Dialog open={showUserManagement} onOpenChange={setShowUserManagement}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Workspace User Management</DialogTitle>
+              <DialogDescription>
+                Manage users for {selectedWorkspace?.name}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedWorkspace && (
+              <WorkspaceUserManagement
+                workspaceId={selectedWorkspace.id}
+                workspaceName={selectedWorkspace.name}
+                currentUserRole={user?.role}
+                onClose={() => setShowUserManagement(false)}
+              />
+            )}
+          </DialogContent>
         </Dialog>
     </>
   );
