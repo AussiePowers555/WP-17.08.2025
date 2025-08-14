@@ -53,7 +53,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { WorkspaceUserManagement } from '@/components/workspace-user-management';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 
 interface Contact {
   id: string;
