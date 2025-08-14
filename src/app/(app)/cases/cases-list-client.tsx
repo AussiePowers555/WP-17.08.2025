@@ -188,13 +188,13 @@ export default function CasesListClient({
   }
 
   const handleDeleteCase = async (caseId: string | undefined, caseNumber: string) => {
-    if (!confirm(`Are you sure you want to delete case ${caseNumber}? The case will be moved to trash where it can be restored or permanently deleted.`)) {
+    if (!confirm(`Are you sure you want to delete case ${caseNumber}?`)) {
       return;
     }
 
-    // Use case ID if available, otherwise use case number
-    const identifier = caseId || caseNumber;
-    console.log(`[Delete] Using identifier: ${identifier} (ID: ${caseId}, Case Number: ${caseNumber})`);
+    // Use case number as the identifier since ID might be missing
+    const identifier = caseNumber;
+    console.log(`[Delete] Deleting case by case number: ${caseNumber}`);
 
     setIsDeleting(true);
     try {
@@ -202,26 +202,32 @@ export default function CasesListClient({
         method: 'DELETE',
       });
 
+      const responseText = await response.text();
+      console.log(`[Delete] Response status: ${response.status}, Response: ${responseText}`);
+
       if (response.ok) {
-        const result = await response.json();
-        console.log('Case moved to trash:', result);
+        // Immediately remove the case from the local state
+        setHydratedCases(prev => prev.filter(c => c.caseNumber !== caseNumber));
         
-        // Show success message
-        alert(`Case ${caseNumber} has been moved to trash`);
-        
-        // Trigger on-demand revalidation
-        await fetch('/api/revalidate/cases', { method: 'POST' });
-        
-        // Refresh the cases list
-        window.location.reload();
+        // Then reload the page to get fresh data
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
       } else {
-        const error = await response.json();
-        alert(`Failed to delete case: ${error.error}`);
+        // Parse error if possible
+        try {
+          const error = JSON.parse(responseText);
+          console.error('[Delete] Error:', error);
+          alert(`Failed to delete case: ${error.error || 'Unknown error'}`);
+        } catch {
+          console.error('[Delete] Failed to parse error:', responseText);
+          alert(`Failed to delete case: ${responseText || 'Unknown error'}`);
+        }
+        setIsDeleting(false);
       }
     } catch (error) {
-      console.error('Error deleting case:', error);
-      alert('Failed to delete case. Please try again.');
-    } finally {
+      console.error('[Delete] Network error:', error);
+      alert('Network error. Please check your connection and try again.');
       setIsDeleting(false);
     }
   };
