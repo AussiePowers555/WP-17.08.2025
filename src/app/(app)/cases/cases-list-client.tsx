@@ -865,7 +865,6 @@ export default function CasesListClient({
             <Table className="table-fixed w-full whitespace-normal">
                 <TableHeader className="hidden md:table-header-group">
                     <TableRow>
-                        <TableHead className="w-10"></TableHead>
                         <TableHead>
                           <Button
                             variant="ghost"
@@ -920,13 +919,19 @@ export default function CasesListClient({
                     <React.Fragment key={c.caseNumber}>
                       {/* Desktop view - single row */}
                       <TableRow data-test="case-row" className="hidden md:table-row">
-                          <TableCell className="w-10">
-                            <Button variant="ghost" size="sm" className="w-9 p-0" onClick={() => toggleRow(c.caseNumber)}>
-                              {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                              <span className="sr-only">Toggle</span>
-                            </Button>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-7 w-7 p-0" 
+                                onClick={() => toggleRow(c.caseNumber)}
+                              >
+                                {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                              </Button>
+                              {c.caseNumber}
+                            </div>
                           </TableCell>
-                          <TableCell className="font-medium">{c.caseNumber}</TableCell>
                           <TableCell>{c.clientName}</TableCell>
                           <TableCell className="hidden xl:table-cell">
                             <Select
@@ -1058,7 +1063,7 @@ export default function CasesListClient({
                       
                       {/* Mobile view - two rows */}
                       <TableRow data-test="case-row-mobile" className="md:hidden border-b-0">
-                          <TableCell colSpan={10} className="p-3">
+                          <TableCell colSpan={9} className="p-3">
                             <div className="space-y-3">
                               {/* First row - Case Number, Client Name, Status, Actions */}
                               <div className="flex items-center justify-between gap-2">
@@ -1124,7 +1129,7 @@ export default function CasesListClient({
                       </TableRow>
                       {isOpen && (
                         <TableRow>
-                          <TableCell colSpan={10} className="p-0">
+                          <TableCell colSpan={9} className="p-0">
                              <div className="p-4 bg-muted/50">
                               <CommunicationLog caseNumber={c.caseNumber} />
                             </div>
