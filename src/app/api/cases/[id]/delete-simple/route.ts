@@ -32,9 +32,9 @@ export async function DELETE(
     const caseToDelete = result.rows[0];
     console.log(`[DELETE-SIMPLE] Found case:`, caseToDelete);
     
-    // Actually DELETE the case from the database
+    // Mark the case as deleted instead of deleting it completely
     const deleteResult = await client.query(
-      'DELETE FROM cases WHERE id = $1',
+      'UPDATE cases SET is_deleted = true, last_updated = NOW() WHERE id = $1',
       [caseToDelete.id]
     );
     

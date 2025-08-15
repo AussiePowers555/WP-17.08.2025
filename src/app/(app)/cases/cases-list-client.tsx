@@ -225,18 +225,18 @@ export default function CasesListClient({
           return newSet;
         });
         
-        // Reset deleting state AFTER updating the lists
-        setTimeout(() => {
-          setIsDeleting(false);
-        }, 200);
+        // Show success message
+        toast({
+          title: "Case Deleted",
+          description: `Case ${caseNumber} has been successfully deleted.`,
+        });
         
-        // Force router refresh to get new server data
+        // Reset deleting state
+        setIsDeleting(false);
+        
+        // Optionally refresh to ensure consistency (but UI is already updated)
+        // Don't do a hard reload as it disrupts the user experience
         router.refresh();
-        
-        // As a fallback, also do a hard reload after a short delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
       } else {
         // Parse error if possible
         try {
