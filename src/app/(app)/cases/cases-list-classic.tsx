@@ -5,20 +5,18 @@ import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { PlusCircle, ChevronDown, ChevronUp, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, FilterX, Search, X, Trash2, Database, RefreshCw, LayoutGrid, TableProperties } from "lucide-react";
-import { WindowsExplorerView } from "@/components/cases/windows-explorer-view";
+import { PlusCircle, ChevronDown, ChevronUp, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, FilterX, Search, X, Trash2, Database, RefreshCw } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { NewCaseForm } from "./new-case-form";
+import { NewCaseForm } from "../cases/new-case-form";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useCases } from "@/hooks/use-database";
 import { useToast } from "@/hooks/use-toast";
 /* Removed unused/invalid import - no exported member useAuthFetch */
-import CommunicationLog from "./[caseId]/communication-log";
+import CommunicationLog from "../cases/[caseId]/communication-log";
 import RequireWorkspace from "@/components/RequireWorkspace";
 import type {
   CaseFrontend as Case,
@@ -60,7 +58,7 @@ type CaseFormValues = {
 
 const statusOptions = ['New Matter', 'Customer Contacted', 'Awaiting Approval', 'Bike Delivered', 'Bike Returned', 'Demands Sent', 'Awaiting Settlement', 'Settlement Agreed', 'Paid', 'Closed'];
 
-export default function CasesListClient({ 
+export default function CasesListClassic({ 
   initialCases, 
   initialContacts, 
   initialWorkspaces 
@@ -76,11 +74,7 @@ export default function CasesListClient({
     workspaceIdCtx, 
     workspaceNameCtx, 
     workspaceRole,
-    currentUser: currentUser?.email,
-    currentUserRole: currentUser?.role,
-    currentUserWorkspaceId: currentUser?.workspaceId || currentUser?.workspace_id,
-    totalCases: initialCases.length,
-    hydratedCases: hydratedCases.length
+    currentUser: currentUser?.email
   });
 
   // Sorting state
@@ -93,7 +87,6 @@ export default function CasesListClient({
   const [isClient, setIsClient] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCreatingMock, setIsCreatingMock] = useState(false);
-  const [viewMode, setViewMode] = useState<'explorer' | 'table'>('explorer');
   const router = useRouter();
   const { toast } = useToast();
 
@@ -192,69 +185,34 @@ export default function CasesListClient({
     }
   }
 
-  const handleDeleteCase = async (caseId: string | undefined, caseNumber: string) => {
-    if (!confirm(`Are you sure you want to delete case ${caseNumber}?`)) {
+  const handleDeleteCase = async (caseId: string, caseNumber: string) => {
+    if (!confirm(`Are you sure you want to delete case ${caseNumber}? This will also delete all associated documents and cannot be undone.`)) {
       return;
     }
 
-    // Use case number as the identifier since ID might be missing
-    const identifier = caseNumber;
-    console.log(`[Delete] Deleting case by case number: ${caseNumber}`);
-
     setIsDeleting(true);
     try {
-      // Use the POST endpoint for deleting cases
-      const response = await fetch('/api/cases/delete-case', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ caseNumber }),
+      const response = await fetch(`/api/cases/${caseId}/delete`, {
+        method: 'DELETE',
       });
 
-      const responseText = await response.text();
-      console.log(`[Delete] Response status: ${response.status}, Response: ${responseText}`);
-
       if (response.ok) {
-        // Immediately remove the case from ALL state variables
-        setHydratedCases(prev => {
-          const filtered = prev.filter(c => c.caseNumber !== caseNumber);
-          console.log(`[Delete] Removed case from UI. Before: ${prev.length}, After: ${filtered.length}`);
-          return filtered;
-        });
+        const result = await response.json();
+        console.log('Case deleted:', result);
         
-        // Also remove from open rows if it was expanded
-        setOpenRows(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(caseNumber);
-          return newSet;
-        });
+        // Trigger on-demand revalidation
+        await fetch('/api/revalidate/cases', { method: 'POST' });
         
-        // Show success message
-        toast({
-          title: "Case Deleted",
-          description: `Case ${caseNumber} has been successfully deleted.`,
-        });
-        
-        // Reset deleting state
-        setIsDeleting(false);
-        
-        // Don't refresh - we've already updated the UI optimistically
+        // Refresh the cases list
+        window.location.reload();
       } else {
-        // Parse error if possible
-        try {
-          const error = JSON.parse(responseText);
-          console.error('[Delete] Error:', error);
-          alert(`Failed to delete case: ${error.error || 'Unknown error'}`);
-        } catch {
-          console.error('[Delete] Failed to parse error:', responseText);
-          alert(`Failed to delete case: ${responseText || 'Unknown error'}`);
-        }
-        setIsDeleting(false);
+        const error = await response.json();
+        alert(`Failed to delete case: ${error.error}`);
       }
     } catch (error) {
-      console.error('[Delete] Network error:', error);
-      alert('Network error. Please check your connection and try again.');
+      console.error('Error deleting case:', error);
+      alert('Failed to delete case. Please try again.');
+    } finally {
       setIsDeleting(false);
     }
   };
@@ -539,13 +497,11 @@ export default function CasesListClient({
     .filter(c => {
       // First apply workspace/user visibility rules
       let visibilityPassed = false;
-      let userWorkspaceId: string | undefined;
       
-      // If workspace user or client, they should only see cases in their workspace
-      if (currentUser?.role === 'workspace_user' || currentUser?.role === 'client' || 
-          currentUser?.role === 'lawyer' || currentUser?.role === 'rental_company') {
-        // Workspace users/clients see cases assigned to their workspace
-        userWorkspaceId = currentUser.workspaceId || currentUser.workspace_id || workspaceIdCtx;
+      // If workspace user, they should only see cases in their workspace
+      if (currentUser?.role === 'workspace_user') {
+        // Workspace users see cases assigned to their workspace
+        const userWorkspaceId = currentUser.workspaceId || workspaceIdCtx;
         visibilityPassed = c.workspaceId === userWorkspaceId;
         
         // Additional filter: if they have a contact ID, only show cases assigned to them
@@ -563,16 +519,13 @@ export default function CasesListClient({
         }
       }
       
-      // Debug logging for first few cases
-      if (hydratedCases.indexOf(c) < 3) {
+      // Debug logging
+      if (c.workspaceId) {
         console.log('[Filter Debug]', {
           caseNumber: c.caseNumber,
           caseWorkspaceId: c.workspaceId,
-          userWorkspaceId,
           workspaceIdCtx,
           userRole: currentUser?.role,
-          isNonAdminUser: currentUser?.role === 'workspace_user' || currentUser?.role === 'client' || 
-                         currentUser?.role === 'lawyer' || currentUser?.role === 'rental_company',
           visibilityPassed
         });
       }
@@ -641,97 +594,13 @@ export default function CasesListClient({
     return <div className="flex items-center justify-center h-64 text-muted-foreground">Authenticating...</div>;
   }
   
-  // File Explorer handlers
-  const handleCaseMove = async (caseId: string, workspaceId: string | null) => {
-    const caseItem = hydratedCases.find(c => c.id === caseId);
-    if (!caseItem) return;
-    
-    await handleWorkspaceAssignment(caseItem.caseNumber, workspaceId || 'none');
-  };
-
-  const handleCaseOpen = (caseId: string) => {
-    router.push(`/cases/${caseId}`);
-  };
-
-  const handleWorkspaceCreateFromExplorer = async (name: string, email: string, password: string) => {
-    try {
-      const response = await fetch('/api/workspaces/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to create workspace');
-      }
-      
-      const result = await response.json();
-      
-      // Refresh the page to show the new workspace
-      window.location.reload();
-      
-      return result;
-    } catch (error) {
-      console.error('Error creating workspace:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to create workspace. Please try again."
-      });
-      throw error;
-    }
-  };
-
-  const handleWorkspaceDeleteFromExplorer = async (workspaceId: string) => {
-    // This would delete a workspace
-    // For now, just show a message
-    toast({
-      title: "Feature Coming Soon",
-      description: "Workspace deletion from explorer will be implemented soon."
-    });
-  };
 
   return (
     <RequireWorkspace>
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold">Case Management</h1>
-            {/* View Mode Toggle */}
-            <div className="flex items-center border rounded-md">
-              <Button
-                variant={viewMode === 'explorer' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('explorer')}
-                className="rounded-r-none"
-              >
-                <LayoutGrid className="h-4 w-4 mr-2" />
-                Explorer
-              </Button>
-              <Button
-                variant={viewMode === 'table' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('table')}
-                className="rounded-l-none"
-              >
-                <TableProperties className="h-4 w-4 mr-2" />
-                Classic
-              </Button>
-            </div>
-          </div>
+          <h1 className="text-2xl font-bold">Cases</h1>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleCreateMockCases}
-            disabled={isCreatingMock}
-          >
-            {isCreatingMock ? (
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Database className="mr-2 h-4 w-4" />
-            )}
-            Create Mock Cases
-          </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -753,19 +622,7 @@ export default function CasesListClient({
         </div>
       </div>
       
-      {/* Explorer View */}
-      {viewMode === 'explorer' ? (
-        <WindowsExplorerView
-          cases={filteredAndSortedCases}
-          workspaces={initialWorkspaces as Workspace[]}
-          onCaseMove={handleCaseMove}
-          onCaseOpen={handleCaseOpen}
-          onWorkspaceCreate={handleWorkspaceCreateFromExplorer}
-          onWorkspaceDelete={handleWorkspaceDeleteFromExplorer}
-        />
-      ) : (
-        <>
-      {/* Classic Table View */}
+      {/* Table View */}
       {/* Search Field */}
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
@@ -866,6 +723,7 @@ export default function CasesListClient({
             <Table className="table-fixed w-full whitespace-normal">
                 <TableHeader className="hidden md:table-header-group">
                     <TableRow>
+                        <TableHead className="w-12"></TableHead>
                         <TableHead>
                           <Button
                             variant="ghost"
@@ -920,35 +778,24 @@ export default function CasesListClient({
                     <React.Fragment key={c.caseNumber}>
                       {/* Desktop view - single row */}
                       <TableRow data-test="case-row" className="hidden md:table-row">
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button 
-                                      variant="outline" 
-                                      size="icon"
-                                      className="h-7 w-7" 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        toggleRow(c.caseNumber);
-                                      }}
-                                    >
-                                      {isOpen ? (
-                                        <ChevronUp className="h-4 w-4" />
-                                      ) : (
-                                        <ChevronRight className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{isOpen ? 'Collapse' : 'Expand'} details</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              <span className="font-medium">{c.caseNumber}</span>
-                            </div>
+                          <TableCell className="w-12">
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="h-8 w-8" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleRow(c.caseNumber);
+                              }}
+                            >
+                              {isOpen ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
                           </TableCell>
+                          <TableCell className="font-medium">{c.caseNumber}</TableCell>
                           <TableCell>{c.clientName}</TableCell>
                           <TableCell className="hidden xl:table-cell">
                             <Select
@@ -1044,28 +891,13 @@ export default function CasesListClient({
                           <TableCell>{c.lastUpdated instanceof Date ? c.lastUpdated.toLocaleString() : c.lastUpdated}</TableCell>
                           <TableCell>
                             <div className="flex gap-2 flex-wrap">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => {
-                                  const identifier = c.id || c.caseNumber;
-                                  console.log(`[View Details] Navigating to case: ${identifier} (ID: ${c.id}, Case Number: ${c.caseNumber})`);
-                                  router.push(`/cases/${identifier}`);
-                                }}
-                              >
+                              <Button variant="outline" size="sm" onClick={() => router.push(`/cases/${c.id}`)}>
                                 View Details
                               </Button>
                               <Button
                                 variant="destructive"
                                 size="sm"
-                                onClick={() => {
-                                  if (!c.id && !c.caseNumber) {
-                                    console.error('[Delete] No identifier available for case:', c);
-                                    alert('Cannot delete case: No case ID or number available');
-                                    return;
-                                  }
-                                  handleDeleteCase(c.id, c.caseNumber);
-                                }}
+                                onClick={() => handleDeleteCase(c.id!, c.caseNumber)}
                                 disabled={isDeleting}
                               >
                                 {isDeleting ? (
@@ -1080,7 +912,7 @@ export default function CasesListClient({
                       
                       {/* Mobile view - two rows */}
                       <TableRow data-test="case-row-mobile" className="md:hidden border-b-0">
-                          <TableCell colSpan={9} className="p-3">
+                          <TableCell colSpan={10} className="p-3">
                             <div className="space-y-3">
                               {/* First row - Case Number, Client Name, Status, Actions */}
                               <div className="flex items-center justify-between gap-2">
@@ -1096,15 +928,7 @@ export default function CasesListClient({
                                     {statusOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  onClick={() => {
-                                    const identifier = c.id || c.caseNumber;
-                                    console.log(`[Mobile View] Navigating to case: ${identifier} (ID: ${c.id}, Case Number: ${c.caseNumber})`);
-                                    router.push(`/cases/${identifier}`);
-                                  }}
-                                >
+                                <Button variant="outline" size="sm" onClick={() => router.push(`/cases/${c.id}`)}>
                                   View
                                 </Button>
                               </div>
@@ -1146,7 +970,7 @@ export default function CasesListClient({
                       </TableRow>
                       {isOpen && (
                         <TableRow>
-                          <TableCell colSpan={9} className="p-0">
+                          <TableCell colSpan={10} className="p-0">
                              <div className="p-4 bg-muted/50">
                               <CommunicationLog caseNumber={c.caseNumber} />
                             </div>
@@ -1161,8 +985,6 @@ export default function CasesListClient({
           </div>
         </CardContent>
       </Card>
-        </>
-      )}
       </div>
     </RequireWorkspace>
   );

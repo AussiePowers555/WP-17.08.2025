@@ -1,20 +1,25 @@
+import CasesListClassic from "./cases-list-classic";
+import { DatabaseService, ensureDatabaseInitialized } from '@/lib/database';
+import { ContactFrontend, WorkspaceFrontend } from '@/lib/database-schema';
 
-import { Suspense } from 'react';
-import CasesListServer, { CasesListSkeleton } from './cases-list-server';
-import CasesClientWrapper from './cases-client-wrapper';
+async function getCasesData() {
+  await ensureDatabaseInitialized();
+  const [cases, contacts, workspaces] = await Promise.all([
+    DatabaseService.getAllCases(),
+    DatabaseService.getAllContacts() as Promise<ContactFrontend[]>,
+    DatabaseService.getAllWorkspaces() as Promise<WorkspaceFrontend[]>,
+  ]);
+  return { cases, contacts, workspaces };
+}
 
-// Force dynamic rendering to avoid database connection during build
-export const dynamic = 'force-dynamic';
-export const revalidate = 0; // Disable caching completely
-export const fetchCache = 'force-no-store'; // Force no caching at all
-
-// Server component with dynamic rendering
-export default function CasesPage() {
+export default async function CasesClassicPage() {
+  const { cases, contacts, workspaces } = await getCasesData();
+  
   return (
-    <CasesClientWrapper>
-      <Suspense fallback={<CasesListSkeleton />}>
-        <CasesListServer />
-      </Suspense>
-    </CasesClientWrapper>
+    <CasesListClassic 
+      initialCases={cases} 
+      initialContacts={contacts}
+      initialWorkspaces={workspaces}
+    />
   );
 }

@@ -37,8 +37,8 @@ import { cn } from "@/lib/utils"
 
 const primaryNavItems = [
     { href: "/workspaces", label: "Workspaces", icon: LayoutGrid, adminOnly: true },
-    { href: "/cases", label: "Case Explorer", icon: Briefcase, adminOnly: true },
-    { href: "/cases-classic", label: "Case Log", icon: FileText, adminOnly: true },
+    { href: "/cases", label: "Cases", icon: Briefcase, adminOnly: true },
+    { href: "/cases-explorer", label: "Case Explorer", icon: FileText, adminOnly: true },
     { href: "/interactions", label: "Interactions", icon: MessageSquare, adminOnly: false },
 ]
 
