@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown, FilterX, Search, X, Trash2, Database, RefreshCw, LayoutGrid, TableProperties } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PlusCircle, ChevronDown, ChevronUp, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, FilterX, Search, X, Trash2, Database, RefreshCw, LayoutGrid, TableProperties } from "lucide-react";
 import { WindowsExplorerView } from "@/components/cases/windows-explorer-view";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -919,17 +920,33 @@ export default function CasesListClient({
                     <React.Fragment key={c.caseNumber}>
                       {/* Desktop view - single row */}
                       <TableRow data-test="case-row" className="hidden md:table-row">
-                          <TableCell className="font-medium">
+                          <TableCell>
                             <div className="flex items-center gap-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-7 w-7 p-0" 
-                                onClick={() => toggleRow(c.caseNumber)}
-                              >
-                                {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                              </Button>
-                              {c.caseNumber}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon"
+                                      className="h-7 w-7" 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleRow(c.caseNumber);
+                                      }}
+                                    >
+                                      {isOpen ? (
+                                        <ChevronUp className="h-4 w-4" />
+                                      ) : (
+                                        <ChevronRight className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{isOpen ? 'Collapse' : 'Expand'} details</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <span className="font-medium">{c.caseNumber}</span>
                             </div>
                           </TableCell>
                           <TableCell>{c.clientName}</TableCell>
