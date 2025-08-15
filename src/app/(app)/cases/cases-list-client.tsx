@@ -202,9 +202,13 @@ export default function CasesListClient({
 
     setIsDeleting(true);
     try {
-      // Use the simple delete endpoint that actually works
-      const response = await fetch(`/api/cases/${identifier}/delete-simple`, {
-        method: 'DELETE',
+      // Use the POST endpoint for deleting cases
+      const response = await fetch('/api/cases/delete-case', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ caseNumber }),
       });
 
       const responseText = await response.text();
