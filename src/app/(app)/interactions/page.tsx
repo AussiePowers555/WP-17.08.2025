@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { InteractionFeedView, InteractionFilters, InteractionSortOptions } from '@/types/interaction';
-import { getInteractionsSecure } from '@/lib/actions/interactions-secure';
+import { getInteractions } from '@/lib/actions/interactions';
 import { exportFilteredInteractions } from '@/lib/export-utils';
 import { InteractionCardEnhanced } from '@/components/interactions/interaction-card-enhanced';
 import { InteractionFiltersPanelEnhanced } from '@/components/interactions/interaction-filters-enhanced';
@@ -116,7 +116,7 @@ export default function InteractionsPage() {
 
       // Workspace filtering is now handled securely on the server
       // Pass the workspace filter for admins viewing specific workspaces
-      const result = await getInteractionsSecure(pageNum, 20, filters, sort, filterWorkspaceId);
+      const result = await getInteractions(pageNum, 20, filters, sort, filterWorkspaceId, filterContactId);
       
       if (result.success && result.data) {
         if (reset) {
