@@ -238,9 +238,7 @@ export default function CasesListClient({
         // Reset deleting state
         setIsDeleting(false);
         
-        // Optionally refresh to ensure consistency (but UI is already updated)
-        // Don't do a hard reload as it disrupts the user experience
-        router.refresh();
+        // Don't refresh - we've already updated the UI optimistically
       } else {
         // Parse error if possible
         try {
