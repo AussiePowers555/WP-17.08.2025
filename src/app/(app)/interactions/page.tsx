@@ -308,14 +308,16 @@ export default function InteractionsPage() {
             Refresh
           </Button>
           
-          <Button
-            size="sm"
-            onClick={() => setShowCreateDialog(true)}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Log Interaction
-          </Button>
+          {isAdmin && (
+            <Button
+              size="sm"
+              onClick={() => setShowCreateDialog(true)}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Log Interaction
+            </Button>
+          )}
         </div>
       </div>
       
@@ -474,8 +476,8 @@ export default function InteractionsPage() {
         </div>
       )}
       
-      {/* Create Interaction Dialog */}
-      {showCreateDialog && (
+      {/* Create Interaction Dialog - Admin Only */}
+      {isAdmin && showCreateDialog && (
         <InteractionCreateEnhanced
           workspaceId={currentWorkspaceId}
           contactId={filterContactId}
