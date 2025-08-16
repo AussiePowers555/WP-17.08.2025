@@ -106,10 +106,32 @@ export function WorkspaceProvider({
     if (activeWorkspace === 'MAIN' || !activeWorkspace) {
       setWorkspaceName('Main Workspace');
       setContactType(undefined);
+    } else {
+      // Fetch workspace name for non-main workspaces
+      const fetchWorkspaceName = async () => {
+        try {
+          const response = await fetch(`/api/workspaces/${activeWorkspace}`);
+          if (response.ok) {
+            const workspace = await response.json();
+            setWorkspaceName(workspace.name || 'Unknown Workspace');
+            // Set contact type based on workspace type
+            if (workspace.type) {
+              setContactType(workspace.type);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch workspace name:', error);
+        }
+      };
+      
+      // Only fetch if we don't already have a workspace name
+      if (workspaceName === 'Main Workspace' || !workspaceName) {
+        fetchWorkspaceName();
+      }
     }
     // Log for debugging
     console.log('[WorkspaceContext] Active workspace changed:', activeWorkspace);
-  }, [activeWorkspace, setWorkspaceName, setContactType]);
+  }, [activeWorkspace, setWorkspaceName, setContactType, workspaceName]);
   
   // Cleanup toast timer on unmount
   useEffect(() => {
