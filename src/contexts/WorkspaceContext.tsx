@@ -110,17 +110,23 @@ export function WorkspaceProvider({
       // Fetch workspace name for non-main workspaces
       const fetchWorkspaceName = async () => {
         try {
+          console.log('[WorkspaceContext] Fetching workspace name for:', activeWorkspace);
           const response = await fetch(`/api/workspaces/${activeWorkspace}`);
+          console.log('[WorkspaceContext] Response status:', response.status);
+          
           if (response.ok) {
             const workspace = await response.json();
+            console.log('[WorkspaceContext] Received workspace data:', workspace);
             setWorkspaceName(workspace.name || 'Unknown Workspace');
             // Set contact type based on workspace type
             if (workspace.type) {
               setContactType(workspace.type);
             }
+          } else {
+            console.error('[WorkspaceContext] Failed to fetch workspace:', response.status, response.statusText);
           }
         } catch (error) {
-          console.error('Failed to fetch workspace name:', error);
+          console.error('[WorkspaceContext] Failed to fetch workspace name:', error);
         }
       };
       
