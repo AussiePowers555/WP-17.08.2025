@@ -166,7 +166,7 @@ export async function getInteractions(
         i.created_by as "createdByEmail"
       FROM interactions i
       LEFT JOIN cases c ON i.case_id = c.id
-      WHERE (c.is_deleted = false OR c.is_deleted IS NULL)
+      WHERE 1=1
       ${whereClause ? 'AND ' + whereClause : ''}
       ${orderBy}
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
@@ -196,7 +196,7 @@ export async function getInteractions(
       SELECT COUNT(*) as total
       FROM interactions i
       LEFT JOIN cases c ON i.case_id = c.id
-      WHERE (c.is_deleted = false OR c.is_deleted IS NULL)
+      WHERE 1=1
       ${whereClause ? 'AND ' + whereClause : ''}
     `;
     
@@ -525,7 +525,7 @@ export async function getRecentInteractions(
         i.created_by as "createdByName"
       FROM interactions i
       LEFT JOIN cases c ON i.case_id = c.id
-      WHERE (c.is_deleted = false OR c.is_deleted IS NULL)
+      WHERE 1=1
       ${whereClause ? 'AND ' + whereClause : ''}
       ORDER BY i.timestamp DESC
       LIMIT ${limitParamIndex}
