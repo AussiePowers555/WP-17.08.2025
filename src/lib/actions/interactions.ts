@@ -48,9 +48,9 @@ export async function getInteractions(
     
     // Filter by workspace for all users (unless viewing MAIN/all)
     if (workspaceId && workspaceId !== 'MAIN') {
-      // Filter interactions by cases that belong to the workspace
-      // Cases have workspace_id directly on them
-      whereConditions.push(`c.workspace_id = $${paramIndex++}`);
+      // Filter interactions by their workspace_id directly
+      // This ensures we get all interactions for the workspace regardless of case links
+      whereConditions.push(`i.workspace_id = $${paramIndex++}`);
       queryParams.push(workspaceId);
     }
     
